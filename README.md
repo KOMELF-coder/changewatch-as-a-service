@@ -59,20 +59,51 @@ Requests use a browser-style user agent, TLS verification, 10-second connection 
 
 BeautifulSoup removes scripts, styles, navigation, footers, hidden elements and common inline hiding styles. Unicode/whitespace normalization ignores formatting-only changes that preserve text. Word-level diffs include up to ten changed sections and 500 characters per side; `diff_truncated` indicates omissions. Snapshots retain full normalized text.
 
-Score = `min(100, 10 + round(20 * (1 - similarity)) + concept weights + monetary bonus)` for changed pages only. Each group counts once, using changed text plus six neighboring words on each side:
+Base score = `min(100, 10 + round(20 * (1 - similarity)) + concept weights + monetary bonus)` for changed pages only. Each group counts once, using changed text plus six neighboring words on each side. Keywords support English and French:
 
 | Group | Weight |
 | --- | ---: |
-| Price / pricing | 30 |
-| Discount / promotion / sale | 25 |
-| New product / new service | 25 |
-| Shipping / delivery | 15 |
-| Subscription / annual plan / monthly plan / free trial | 25 |
-| Feature | 15 |
-| Launch | 25 |
-| Availability / stock | 20 |
+| Price / pricing / cost / prix / tarif / coût | 30 |
+| Discount / sale / promotion / promo / réduction / remise / soldes | 25 |
+| Product / service / produit / nouveau produit / nouveau service | 25 |
+| Shipping / delivery / livraison / frais de port | 15 |
+| Subscription / monthly / annual / free trial / abonnement / mensuel / annuel | 25 |
+| Feature / fonctionnalité | 15 |
+| Launch / launched / lancement / nouveauté | 25 |
+| Availability / stock / available / unavailable / disponibilité / disponible / indisponible / rupture | 20 |
 
-Currency amounts or percentages in that context add 20. This is a prioritization heuristic, not a probability. English keyword rules do not require AI. Every normalized text change is reported; consumers can filter by `changed` and a chosen score threshold. Similarity uses word-level Python `SequenceMatcher` with its frequent-token heuristic enabled for large repetitive pages.
+Currency amounts or percentages in that context add 20. This is a prioritization heuristic, not a probability. Every normalized text change is reported; consumers can filter by `changed` and a chosen score threshold. Similarity uses word-level Python `SequenceMatcher` with its frequent-token heuristic enabled for large repetitive pages.
+
+### Structured price changes
+
+Monetary parsing supports symbols before or after amounts, EUR/USD/GBP codes, comma/dot decimals and conventional thousands separators: `€99`, `99 €`, `99,99 €`, `$99`, `99 USD`, `£99`, `1 299,99 €`. Bare `$` means USD; no currency conversion is performed.
+
+Prices are compared within aligned text edits. A replacement must contain exactly one old and one new amount in the same currency. Additions, deletions, currency changes and ambiguous multi-price replacements do not produce structured price changes. Separately aligned price edits can produce multiple entries in `price_changes`; the top-level fields describe the first entry with the highest scoring tier. Existing snapshot records need no migration.
+
+The final score is the larger of the base score and the price-change floor, capped at 100:
+
+| Absolute percentage change (increase or decrease) | Minimum score |
+| --- | ---: |
+| Any detected price change | 60 |
+| At least 5% | 70 |
+| At least 10% | 80 |
+| At least 20% | 90 |
+
+For `Prix : 99 €` → `Prix : 79 €`, additional fields are:
+
+```json
+{
+  "change_type": "price_change",
+  "old_price": 99,
+  "new_price": 79,
+  "currency": "EUR",
+  "price_change_absolute": -20,
+  "price_change_percent": -20.2,
+  "importance_score": 90
+}
+```
+
+`price_change_absolute` is the signed new-minus-old difference. Percentage is relative to the old amount and rounded to two decimal places; a zero old price produces a null percentage and a minimum score of 60. Tier comparisons use unrounded percentage magnitudes. Arithmetic uses Python Decimal, serialized as JSON numbers. The extra price fields are omitted when no price change is identified; all existing output fields remain intact. Changes to currency formatting alone do not count as a price change, though they can still be textual changes.
 
 ## Snapshot persistence and reliability
 

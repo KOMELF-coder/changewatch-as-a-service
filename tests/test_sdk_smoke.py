@@ -62,6 +62,13 @@ def test_sdk_persistence(tmp_path):
             records = sorted((storage / "datasets" / "default").glob("[0-9]*.json"))
             assert records, result.stdout + result.stderr
             assert json.loads(records[-1].read_text(encoding="utf-8"))["status"] == expected
+            if expected == "changed":
+                alert = json.loads(records[-1].read_text(encoding="utf-8"))
+                assert alert["change_type"] == "price_change"
+                assert alert["old_price"] == 10
+                assert alert["new_price"] == 20
+                assert alert["price_change_percent"] == 100
+                assert alert["importance_score"] >= 90
     finally:
         server.shutdown()
         server.server_close()

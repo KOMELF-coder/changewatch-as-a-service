@@ -11,6 +11,8 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 from bs4 import BeautifulSoup
 
+from .prices import MONEY, detect_price_changes, price_score_floor
+
 MAX_BYTES = 5_000_000
 MAX_TEXT = 200_000
 USER_AGENT = (
@@ -18,17 +20,20 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 CONCEPTS = {
-    "pricing": (30, r"\bpric(?:e|es|ing)\b"),
-    "promotion": (25, r"\b(?:discounts?|promotions?|sale|sales)\b"),
-    "new offering": (25, r"\bnew (?:products?|services?)\b"),
-    "shipping": (15, r"\b(?:shipping|delivery)\b"),
+    "pricing": (30, r"\b(?:prices?|pricing|costs?|tarifs?|prix|coûts?)\b"),
+    "promotion": (25, r"\b(?:discounts?|promotions?|promos?|sales?|réductions?|remises?|soldes)\b"),
+    "new offering": (25, r"\b(?:products?|services?|produits?|nouveau produit|nouveau service)\b"),
+    "shipping": (15, r"\b(?:shipping|delivery|livraisons?|frais de port)\b"),
     "subscription": (
         25,
-        r"\b(?:subscriptions?|annual plans?|monthly plans?|free trials?)\b",
+        r"\b(?:subscriptions?|monthly|annual|free trials?|abonnements?|mensuel(?:le)?s?|annuel(?:le)?s?)\b",
     ),
-    "feature": (15, r"\bfeatures?\b"),
-    "launch": (25, r"\blaunch(?:es|ed|ing)?\b"),
-    "availability": (20, r"\b(?:availability|available|unavailable|stock)\b"),
+    "feature": (15, r"\b(?:features?|fonctionnalités?)\b"),
+    "launch": (25, r"\b(?:launch(?:es|ed|ing)?|lancements?|nouveautés?)\b"),
+    "availability": (
+        20,
+        r"\b(?:availability|available|unavailable|stocks?|disponibilité|disponible|indisponible|rupture)\b",
+    ),
 }
 
 
@@ -201,13 +206,18 @@ def compare(previous: str | None, current: str) -> dict:
     context = " \n ".join(contexts).lower()
     matched = [name for name, (_, pattern) in CONCEPTS.items() if re.search(pattern, context)]
     ratio = matcher.ratio()
-    money = any(
-        re.search(r"(?:[$€£]\s*\d|\d[\d.,]*\s*(?:USD|EUR|GBP|%))", c, re.I) for c in contexts
-    )
+    money = any(MONEY.search(c) or re.search(r"\d[\d.,]*\s*%", c) for c in contexts)
     score = min(
         100,
         10 + round(20 * (1 - ratio)) + sum(CONCEPTS[k][0] for k in matched) + (20 if money else 0),
     )
+    price_changes = detect_price_changes(previous, current)
+    price_fields = {}
+    if price_changes:
+        # The top-level fields describe the most material detected price edit.
+        primary = max(price_changes, key=price_score_floor)
+        score = max(score, price_score_floor(primary))
+        price_fields = {"change_type": "price_change", **primary, "price_changes": price_changes}
     bounded = [{k: v[:500] for k, v in change.items()} for change in changes[:10]]
     excerpt = bounded[0]
     summary = f"{len(changes)} text change(s)"
@@ -216,6 +226,7 @@ def compare(previous: str | None, current: str) -> dict:
     summary += f". Before: {excerpt['removed'][:140] or '(none)'}. After: {excerpt['added'][:140] or '(none)'}."
     return {
         **base,
+        **price_fields,
         "status": "changed",
         "changed": True,
         "importance_score": score,
