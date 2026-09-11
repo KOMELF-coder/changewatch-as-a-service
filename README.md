@@ -17,6 +17,8 @@ The input UI provides a Client ID and individually editable competitor name/URL 
 ```json
 {
   "client_id": "demo-client",
+  "alert_threshold": 60,
+  "language": "en",
   "competitors": [
     {"name": "Competitor A", "url": "https://example.com/pricing"}
   ]
@@ -111,7 +113,7 @@ The **named** store `changewatch-snapshots-v1` persists across runs. Keys hash c
 
 Records contain schema version, client ID, URL, text, hash and last-success timestamp. Fetch errors never overwrite them. Corrupt/incompatible records fail the run for inspection. To deliberately reset a baseline, delete its `snapshot_key` record; the next successful fetch initializes it.
 
-The Dataset result is written before the snapshot advances. Storage failures fail the run. These writes are not transactional: interruption between writes can repeat an alert on retry. Consumers can deduplicate by client ID, URL, previous hash and current hash. Run only one instance at a time for the same client/URL; overlapping runs can race because updates are not locked.
+Optional email delivery is attempted before the Dataset result is written, then the snapshot advances. Storage failures fail the run. These operations are not transactional: interruption between email acceptance and storage writes can repeat an email on a rerun. Consumers can deduplicate Dataset alerts by client ID, URL, previous hash and current hash. Run only one instance at a time for the same client/URL; overlapping runs can race because updates are not locked.
 
 The MVP reads server-rendered HTML. It does not execute JavaScript, render CSS, solve CAPTCHAs, or recognize every HTTP-200 bot/error page. Dynamic timestamps, cookie banners and personalization can trigger changes. Choose stable public pages and review response quality before relying on alerts.
 
@@ -145,4 +147,118 @@ Save the input as an Actor task. In Apify Console **Schedules**, create a daily 
 
 References: [Apify scheduling](https://docs.apify.com/platform/schedules), [named storage](https://docs.apify.com/sdk/python/docs/concepts/storages), [input UI schema](https://docs.apify.com/actors/development/actor-definition/input-schema/specification/v1).
 
-No payments, authentication, dashboard, email, external AI analysis or marketplace integration is included.
+## Client alerts and optional email
+
+Optional input fields (existing inputs still work):
+
+| Field | Default | Behavior |
+| --- | --- | --- |
+| `alert_threshold` | `60` | Integer 0–100; a changed page must score at least this value. |
+| `client_email` | omitted | One recipient address. Omit or use an empty string for preview-only operation. |
+| `language` | `en` | `en` or `fr`; controls alert templates, not scraping or scoring. |
+
+An alert is generated only when `changed == true` and `importance_score >= alert_threshold`. Equality qualifies. Initialization, unchanged pages, errors, and changes below the threshold remain in the Dataset but do not generate or send alerts, even if the threshold is zero.
+
+Every Dataset item retains all previous fields and adds:
+
+```json
+{
+  "alert_triggered": true,
+  "alert_sent": false,
+  "alert_subject": "ChangeWatch Alert - Test Shop - Price change detected",
+  "alert_body": "Human-readable plain-text message...",
+  "alert_threshold": 60,
+  "email_error": null
+}
+```
+
+For non-triggered items, subject/body are empty strings and both flags are false. Missing email still produces qualifying alert text, with `alert_sent: false` and `email_error: null`. Missing provider configuration produces a safe explanatory `email_error` and logs that delivery is disabled. Provider rejection or request failure is recorded without failing monitoring. `alert_sent: true` means Resend acknowledged the request with a message ID; it does not confirm inbox delivery, and later bounces are not tracked.
+
+Deterministic templates cover price increases/decreases, discounts/promotions, products/services, shipping/delivery, availability/stock and generic important content. Price templates take priority; otherwise the first matching category in the preceding list is used. Other categories use the generic template. French wording and numeric decimal separators are localized; quoted page excerpts remain in their original language. For multiple prices, the message describes the primary price in the structured result.
+
+### Configure Resend
+
+1. Create a Resend account, add a sending domain and complete its DNS verification. Choose a sender address on that verified domain. Resend's testing sender is restricted; use your verified domain for client delivery.
+2. Create an API key with sending permission for the intended domain.
+3. In the Apify Actor's environment-variable configuration, securely set these values. Store the API key as a secret value, not in input, Git, Dockerfile or logs:
+
+| Environment variable | Meaning |
+| --- | --- |
+| `EMAIL_PROVIDER_API_KEY` | Resend API key; required to send. |
+| `EMAIL_FROM_ADDRESS` | Verified sender email address; required to send. |
+| `EMAIL_FROM_NAME` | Optional sender display name; defaults to `ChangeWatch`. |
+
+4. Rebuild the Actor from `main`, supply `client_email`, select `language` and the threshold, then run against a controlled page with a meaningful change.
+
+Delivery uses a dedicated HTTPS client calling Resend's `POST /emails` endpoint with a plain-text body, redirects disabled, and a bounded timeout. No additional SDK or AI API is needed. Provider response bodies, recipient addresses and credentials are not included in delivery logs or error strings. The recipient remains part of your Apify input, so restrict access appropriately.
+
+See [Resend sending API](https://resend.com/docs/api-reference/emails/send-email) and [domain verification](https://resend.com/docs/dashboard/domains/introduction). `.env.example` lists the variables; the Actor does not automatically load a local `.env` file.
+
+### Delivery failure and retry behavior
+
+This MVP makes one delivery attempt per qualifying result and does not automatically retry or queue failed messages. A timeout can mean delivery is unconfirmed rather than definitely rejected. Failed delivery still writes the Dataset result and advances the successful page snapshot; an unchanged next run will not retry that email. Use `email_error` and the retained alert text for manual follow-up. Exactly-once delivery is not guaranteed across interruptions or overlapping runs.
+
+### French example
+
+Subject: `Alerte ChangeWatch - Test Shop - Variation de prix détectée`
+
+```text
+🚨 Changement concurrent important détecté
+
+Concurrent : Test Shop
+URL: https://example.com
+
+Type de changement : Baisse de prix
+Ancien prix : 99 €
+Nouveau prix : 79 €
+Variation : -20 € (-20,2 %)
+
+Importance: 90/100
+
+Résumé :
+Test Shop a baissé son prix de 99 € à 79 €.
+
+Action recommandée :
+Vérifiez si cette variation est temporaire ou permanente et réévaluez votre positionnement tarifaire.
+
+Détecté le :
+2026-09-11T12:00:00+00:00
+```
+
+### English example
+
+Subject: `ChangeWatch Alert - Test Shop - Price change detected`
+
+```text
+🚨 Important competitor change detected
+
+Competitor: Test Shop
+URL: https://example.com
+
+Change type: Price increase
+Previous price: 79 USD
+New price: 99 USD
+Difference: 20 USD
+Change: 25.32%
+
+Importance: 90/100
+
+Summary:
+Test Shop increased its price from 79 USD to 99 USD.
+
+Recommended action:
+Check whether this price change is temporary or permanent and review your pricing/positioning accordingly.
+
+Detected at:
+2026-09-11T12:00:00+00:00
+```
+
+Scores reflect the actual detected context and may be higher than these examples.
+
+### Test without sending email
+
+Omit `client_email` (the safest preview mode even if credentials are configured). Set `language: "fr"` or `"en"`, initialize a controlled page, edit its price, and run again. Read `alert_subject` and `alert_body` in the Dataset. Existing identical snapshots do not retrigger an alert merely because you change the threshold or language.
+
+Run `python -m pytest -q` for mocked provider success, rejection and failure tests alongside the real local SDK persistence test. Automated tests send no real email and require no provider credentials.
+
+No payments, authentication, dashboard, external AI analysis or marketplace integration is included.

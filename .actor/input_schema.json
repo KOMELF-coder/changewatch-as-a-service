@@ -53,6 +53,38 @@
           "url"
         ]
       }
+    },
+    "alert_threshold": {
+      "title": "Alert threshold",
+      "type": "integer",
+      "description": "Generate alerts only for changed pages scoring at least this value (0–100).",
+      "editor": "number",
+      "default": 60,
+      "minimum": 0,
+      "maximum": 100,
+      "sectionCaption": "Client alerts"
+    },
+    "client_email": {
+      "title": "Client email (optional)",
+      "type": "string",
+      "description": "One recipient. Leave empty to generate alert text without sending email. Requires Resend environment configuration.",
+      "editor": "textfield",
+      "maxLength": 254
+    },
+    "language": {
+      "title": "Alert language",
+      "type": "string",
+      "description": "Language for deterministic alert templates. Original page excerpts remain in their source language.",
+      "editor": "select",
+      "enum": [
+        "en",
+        "fr"
+      ],
+      "enumTitles": [
+        "English",
+        "Français"
+      ],
+      "default": "en"
     }
   },
   "required": [

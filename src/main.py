@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import httpx
 from apify import Actor
 
+from .alerts import apply_alert, validate_alert_options
 from .monitor import (
     USER_AGENT,
     compare,
@@ -17,7 +18,9 @@ from .monitor import (
 STORE_NAME = "changewatch-snapshots-v1"
 
 
-async def process_competitor(client_id: str, competitor: dict, store, client, push_data) -> bool:
+async def process_competitor(
+    client_id: str, competitor: dict, store, client, push_data, alert_options=None, sender=None
+) -> bool:
     """Emit before advancing baseline; storage/output failures fail the run."""
     url = competitor["url"]
     key = snapshot_key(client_id, url)
@@ -48,9 +51,8 @@ async def process_competitor(client_id: str, competitor: dict, store, client, pu
             else type(exc).__name__
         )
         Actor.log.warning("Page fetch failed for snapshot %s: %s", key, message)
-        await push_data(
+        result.update(
             {
-                **result,
                 "status": "error",
                 "changed": False,
                 "importance_score": 0,
@@ -64,8 +66,11 @@ async def process_competitor(client_id: str, competitor: dict, store, client, pu
                 "error": message,
             }
         )
+        await apply_alert(result, alert_options, sender)
+        await push_data(result)
         return False
     result.update(compare(previous["text"] if previous else None, current))
+    await apply_alert(result, alert_options, sender)
     await push_data(result)
     await store.set_value(
         key,
@@ -89,7 +94,9 @@ async def process_competitor(client_id: str, competitor: dict, store, client, pu
 
 async def main() -> None:
     async with Actor:
-        client_id, competitors = validate_input(await Actor.get_input())
+        data = await Actor.get_input()
+        client_id, competitors = validate_input(data)
+        alert_options = validate_alert_options(data)
         store = await Actor.open_key_value_store(name=STORE_NAME)
         succeeded = 0
         async with httpx.AsyncClient(
@@ -104,7 +111,7 @@ async def main() -> None:
         ) as client:
             for competitor in competitors:
                 succeeded += await process_competitor(
-                    client_id, competitor, store, client, Actor.push_data
+                    client_id, competitor, store, client, Actor.push_data, alert_options
                 )
         Actor.log.info(
             "Monitoring complete: %s succeeded, %s failed",

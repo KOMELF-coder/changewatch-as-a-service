@@ -1,4 +1,6 @@
 {
   "client_id": "demo-client",
+  "alert_threshold": 60,
+  "language": "en",
   "competitors": [{"name": "Competitor A", "url": "https://example.com/pricing"}]
 }

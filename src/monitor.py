@@ -11,6 +11,7 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 from bs4 import BeautifulSoup
 
+from .alerts import validate_alert_options
 from .prices import MONEY, detect_price_changes, price_score_floor
 
 MAX_BYTES = 5_000_000
@@ -57,8 +58,16 @@ def canonical_url(url: str) -> str:
 
 
 def validate_input(data: object) -> tuple[str, list[dict]]:
-    if not isinstance(data, dict) or set(data) != {"client_id", "competitors"}:
-        raise ValueError("Input must contain client_id and competitors only")
+    required = {"client_id", "competitors"}
+    if (
+        not isinstance(data, dict)
+        or not required <= set(data)
+        or set(data) - required - {"client_email", "alert_threshold", "language"}
+    ):
+        raise ValueError(
+            "Input requires client_id and competitors, with optional client_email, alert_threshold and language"
+        )
+    validate_alert_options(data)
     client = data["client_id"]
     if not isinstance(client, str) or not 1 <= len(client.strip()) <= 200:
         raise ValueError("client_id must be a nonempty string of up to 200 characters")

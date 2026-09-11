@@ -69,6 +69,10 @@ def test_sdk_persistence(tmp_path):
                 assert alert["new_price"] == 20
                 assert alert["price_change_percent"] == 100
                 assert alert["importance_score"] >= 90
+                assert alert["alert_triggered"]
+                assert not alert["alert_sent"]
+                assert alert["alert_body"]
+                assert alert["email_error"] is None
     finally:
         server.shutdown()
         server.server_close()
