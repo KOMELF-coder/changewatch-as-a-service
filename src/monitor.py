@@ -175,6 +175,28 @@ async def fetch_text(client: httpx.AsyncClient, url: str) -> str:
     raise RuntimeError("Fetch attempts exhausted")
 
 
+def fragment_concepts(words: list[str], start: int, end: int) -> set[str]:
+    """Match edited words plus an immediately preceding commercial label.
+
+    A label must end at the edit (apart from a colon), so unchanged neighboring
+    sections and trailing page content cannot donate unrelated concepts.
+    """
+    if start == end:
+        return set()
+    fragment = " ".join(words[start:end]).lower()
+    found = {name for name, (_, pattern) in CONCEPTS.items() if re.search(pattern, fragment)}
+    prefix = " ".join(words[max(0, start - 4) : start]).lower()
+    labels = []
+    for name, (_, pattern) in CONCEPTS.items():
+        for match in re.finditer(pattern, prefix):
+            if re.fullmatch(r"\s*:?\s*", prefix[match.end() :]):
+                labels.append((match.start(), name))
+    if labels:
+        # Prefer the nearest label, rather than a bag of all nearby keywords.
+        found.add(max(labels)[1])
+    return found
+
+
 def compare(previous: str | None, current: str) -> dict:
     current = normalize(current)
     previous = normalize(previous) if previous is not None else None
@@ -204,23 +226,27 @@ def compare(previous: str | None, current: str) -> dict:
     old, new = previous.split(), current.split()
     matcher = SequenceMatcher(None, old, new, autojunk=True)
     changes, contexts = [], []
+    concepts = set()
     for kind, i, j, a, b in matcher.get_opcodes():
         if kind == "equal":
             continue
         changes.append({"removed": " ".join(old[i:j]), "added": " ".join(new[a:b])})
-        # Nearby words let a price-number edit inherit its pricing context.
+        concepts.update(fragment_concepts(old, i, j))
+        concepts.update(fragment_concepts(new, a, b))
+        # Retain the existing monetary-bonus window, separately from concept matching.
         contexts.extend(
             [" ".join(old[max(0, i - 6) : j + 6]), " ".join(new[max(0, a - 6) : b + 6])]
         )
-    context = " \n ".join(contexts).lower()
-    matched = [name for name, (_, pattern) in CONCEPTS.items() if re.search(pattern, context)]
+    price_changes = detect_price_changes(previous, current)
+    if price_changes:
+        concepts.add("pricing")
+    matched = [name for name in CONCEPTS if name in concepts]
     ratio = matcher.ratio()
     money = any(MONEY.search(c) or re.search(r"\d[\d.,]*\s*%", c) for c in contexts)
     score = min(
         100,
         10 + round(20 * (1 - ratio)) + sum(CONCEPTS[k][0] for k in matched) + (20 if money else 0),
     )
-    price_changes = detect_price_changes(previous, current)
     price_fields = {}
     if price_changes:
         # The top-level fields describe the most material detected price edit.

@@ -61,7 +61,7 @@ Requests use a browser-style user agent, TLS verification, 10-second connection 
 
 BeautifulSoup removes scripts, styles, navigation, footers, hidden elements and common inline hiding styles. Unicode/whitespace normalization ignores formatting-only changes that preserve text. Word-level diffs include up to ten changed sections and 500 characters per side; `diff_truncated` indicates omissions. Snapshots retain full normalized text.
 
-Base score = `min(100, 10 + round(20 * (1 - similarity)) + concept weights + monetary bonus)` for changed pages only. Each group counts once, using changed text plus six neighboring words on each side. Keywords support English and French:
+Base score = `min(100, 10 + round(20 * (1 - similarity)) + concept weights + monetary bonus)` for changed pages only. Each concept group counts once. Keywords support English and French:
 
 | Group | Weight |
 | --- | ---: |
@@ -74,7 +74,11 @@ Base score = `min(100, 10 + round(20 * (1 - similarity)) + concept weights + mon
 | Launch / launched / lancement / nouveauté | 25 |
 | Availability / stock / available / unavailable / disponibilité / disponible / indisponible / rupture | 20 |
 
-Currency amounts or percentages in that context add 20. This is a prioritization heuristic, not a probability. Every normalized text change is reported; consumers can filter by `changed` and a chosen score threshold. Similarity uses word-level Python `SequenceMatcher` with its frequent-token heuristic enabled for large repetitive pages.
+Concepts come from removed/added diff fragments, not a scan of the full page. An immediately preceding commercial label (optionally ending in a colon) can supply context: editing `gratuite` in `Livraison gratuite` matches shipping, and editing the number in `Prix : 99 €` matches pricing. Only the nearest such label is used, within four preceding tokens; trailing unchanged text and other nearby sections are excluded. Concepts from separate edits are combined in stable order. Detected monetary price changes explicitly add `pricing`, even without a price keyword. This conservative rule can omit concepts whose relationship to the edit requires longer-range interpretation.
+
+The existing monetary bonus remains unchanged: currency amounts or percentages within six neighboring words of an edit add 20. Price-change score floors also remain unchanged, so removing irrelevant concept matches does not remove the high score guaranteed by a material price change. `change_summary` uses the same refined concept list as `matched_concepts`.
+
+For example, `Prix : 99 €` → `Prix : 79 €` produces only `pricing`, even with unchanged product or delivery text nearby. Changing `Livraison gratuite` to `Livraison 4,99 €` in the same run also adds `shipping`. This is a prioritization heuristic, not a probability. Every normalized text change is reported; consumers can filter by `changed` and a chosen score threshold. Similarity uses word-level Python `SequenceMatcher` with its frequent-token heuristic enabled for large repetitive pages.
 
 ### Structured price changes
 
