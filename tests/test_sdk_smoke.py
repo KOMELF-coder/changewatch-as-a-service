@@ -72,6 +72,7 @@ def test_sdk_persistence(tmp_path):
                 assert alert["alert_triggered"]
                 assert not alert["alert_sent"]
                 assert alert["alert_body"]
+                assert '<html lang="en">' in alert["alert_html"]
                 assert alert["email_error"] is None
     finally:
         server.shutdown()

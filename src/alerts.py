@@ -3,6 +3,7 @@
 import logging
 
 from .email_delivery import send_email, valid_email
+from .html_email import render_html
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ def number(value, french: bool) -> str:
     return text.replace(".", ",") if french else text
 
 
-def render_alert(result: dict, language: str) -> tuple[str, str]:
+def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[str, str]:
     french = language == "fr"
     name = " ".join(result["competitor"].split())
     details = []
@@ -134,6 +135,8 @@ def render_alert(result: dict, language: str) -> tuple[str, str]:
                 ]
             )
     subject = f"{'Alerte ChangeWatch' if french else 'ChangeWatch Alert'} - {name} - {subject_type}"
+    if html:
+        return subject, render_html(result, language, title, details, summary, action)
     lines = [
         "🚨 Changement concurrent important détecté"
         if french
@@ -168,6 +171,7 @@ async def apply_alert(result: dict, options: dict | None = None, sender=None) ->
         alert_sent=False,
         alert_subject="",
         alert_body="",
+        alert_html="",
         alert_threshold=threshold,
         email_error=None,
     )
@@ -182,12 +186,16 @@ async def apply_alert(result: dict, options: dict | None = None, sender=None) ->
         log.info("Email not sent: alert threshold conditions not met.")
         return
     result["alert_subject"], result["alert_body"] = render_alert(result, options["language"])
+    _, result["alert_html"] = render_alert(result, options["language"], html=True)
     if not options["client_email"]:
         log.info("Email delivery disabled: client_email is missing; alert text retained.")
         return
     try:
         sent, error = await (sender or send_email)(
-            options["client_email"], result["alert_subject"], result["alert_body"]
+            options["client_email"],
+            result["alert_subject"],
+            result["alert_body"],
+            result["alert_html"],
         )
     except Exception:
         # Isolate delivery failures, including provider configuration errors.

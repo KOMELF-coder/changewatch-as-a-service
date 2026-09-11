@@ -167,12 +167,13 @@ Every Dataset item retains all previous fields and adds:
   "alert_sent": false,
   "alert_subject": "ChangeWatch Alert - Test Shop - Price change detected",
   "alert_body": "Human-readable plain-text message...",
+  "alert_html": "<!doctype html>...",
   "alert_threshold": 60,
   "email_error": null
 }
 ```
 
-For non-triggered items, subject/body are empty strings and both flags are false. Missing email still produces qualifying alert text, with `alert_sent: false` and `email_error: null`. Missing provider configuration produces a safe explanatory `email_error` and logs that delivery is disabled. Provider rejection or request failure is recorded without failing monitoring. `alert_sent: true` means Resend acknowledged the request with a message ID; it does not confirm inbox delivery, and later bounces are not tracked.
+For non-triggered items, subject/body/HTML are empty strings and both flags are false. Missing email still produces qualifying alert text and HTML, with `alert_sent: false` and `email_error: null`. Missing provider configuration produces a safe explanatory `email_error` and logs that delivery is disabled. Provider rejection or request failure is recorded without failing monitoring. `alert_sent: true` means Resend acknowledged the request with a message ID; it does not confirm inbox delivery, and later bounces are not tracked.
 
 Deterministic templates cover price increases/decreases, discounts/promotions, products/services, shipping/delivery, availability/stock and generic important content. Price templates take priority; otherwise the first matching category in the preceding list is used. Other categories use the generic template. French wording and numeric decimal separators are localized; quoted page excerpts remain in their original language. For multiple prices, the message describes the primary price in the structured result.
 
@@ -190,7 +191,7 @@ Deterministic templates cover price increases/decreases, discounts/promotions, p
 
 4. Rebuild the Actor from `main`, supply `client_email`, select `language` and the threshold, then run against a controlled page with a meaningful change.
 
-Delivery uses a dedicated HTTPS client calling Resend's `POST /emails` endpoint with a plain-text body, redirects disabled, and a bounded timeout. No additional SDK or AI API is needed. Provider response bodies, recipient addresses and credentials are not included in delivery logs or error strings. The recipient remains part of your Apify input, so restrict access appropriately.
+Delivery uses a dedicated HTTPS client calling Resend's `POST /emails` endpoint with both `text = alert_body` and `html = alert_html`, redirects disabled, and a bounded timeout. Plain text remains available to email clients that do not display HTML. No additional SDK or AI API is needed. Provider response bodies, recipient addresses and credentials are not included in delivery logs or error strings. The recipient remains part of your Apify input, so restrict access appropriately.
 
 See [Resend sending API](https://resend.com/docs/api-reference/emails/send-email) and [domain verification](https://resend.com/docs/dashboard/domains/introduction). `.env.example` lists the variables; the Actor does not automatically load a local `.env` file.
 
@@ -254,6 +255,45 @@ Detected at:
 ```
 
 Scores reflect the actual detected context and may be higher than these examples.
+
+### HTML email preview
+
+Open [the complete French HTML example](examples/alert-fr.html) in a browser to preview the actual generated template. It shows a sample score of 100; production scores remain determined by the existing scoring engine. Narrow the browser window to inspect the fluid single-column layout.
+
+```text
+ChangeWatch
+Alerte de veille concurrentielle
+────────────────────────────────────────
+[ Baisse de prix ]
+Test Shop
+Concurrent surveillé
+
+┌──────────────────────────────────────┐
+│ Ancien prix                          │
+│ 99 €                                 │
+│ Nouveau prix                         │
+│ 79 €                                 │
+│ Variation                            │
+│ -20 € (-20,2 %)                       │
+│ Importance                           │
+│ 100/100                              │
+└──────────────────────────────────────┘
+
+Résumé
+Test Shop a baissé son prix de 99 € à 79 €.
+
+Action recommandée
+Vérifiez si cette variation est temporaire
+ou permanente et réévaluez votre
+positionnement tarifaire.
+
+[ Voir la page concurrente ]
+────────────────────────────────────────
+Détecté le : 2026-09-11T12:00:00+00:00
+Surveillance automatisée par ChangeWatch
+```
+
+The white-background template uses system fonts, inline styles, fluid presentation tables, a 600px maximum content width and explicit direction labels. It requires no external CSS, images, fonts, tracking pixels or analytics. All dynamic content is HTML-escaped, including page excerpts and CTA attributes; only HTTP(S) URLs become CTA links. Rendering can vary between email clients; plain text is always sent alongside HTML. Sender configuration is unchanged.
 
 ### Test without sending email
 

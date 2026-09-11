@@ -14,7 +14,9 @@ def valid_email(value: str) -> bool:
     )
 
 
-async def send_email(recipient: str, subject: str, body: str) -> tuple[bool, str | None]:
+async def send_email(
+    recipient: str, subject: str, body: str, html: str = ""
+) -> tuple[bool, str | None]:
     key = os.getenv("EMAIL_PROVIDER_API_KEY", "").strip()
     address = os.getenv("EMAIL_FROM_ADDRESS", "").strip()
     name = os.getenv("EMAIL_FROM_NAME", "ChangeWatch").strip() or "ChangeWatch"
@@ -36,6 +38,7 @@ async def send_email(recipient: str, subject: str, body: str) -> tuple[bool, str
                         "to": [recipient],
                         "subject": subject,
                         "text": body,
+                        **({"html": html} if html else {}),
                     },
                 )
         if not 200 <= response.status_code < 300:
