@@ -1,0 +1,10 @@
+{
+  "actorSpecification": 1,
+  "name": "changewatch-as-a-service",
+  "title": "ChangeWatch-as-a-Service",
+  "description": "Monitor competitor pages and produce scored content-change alerts.",
+  "version": "0.1",
+  "buildTag": "latest",
+  "dockerfile": "../Dockerfile",
+  "input": "./input_schema.json"
+}

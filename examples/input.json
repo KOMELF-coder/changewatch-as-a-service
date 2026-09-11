@@ -1,0 +1,4 @@
+{
+  "client_id": "demo-client",
+  "competitors": [{"name": "Competitor A", "url": "https://example.com/pricing"}]
+}

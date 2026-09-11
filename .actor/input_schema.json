@@ -1,0 +1,62 @@
+{
+  "title": "ChangeWatch monitoring",
+  "description": "Monitor public HTML pages. Keep the same client ID and URLs across runs to compare snapshots.",
+  "type": "object",
+  "schemaVersion": 1,
+  "additionalProperties": false,
+  "properties": {
+    "client_id": {
+      "title": "Client ID",
+      "type": "string",
+      "description": "Stable identifier isolating this client's snapshots.",
+      "editor": "textfield",
+      "minLength": 1,
+      "maxLength": 200,
+      "prefill": "demo-client"
+    },
+    "competitors": {
+      "title": "Competitor pages",
+      "type": "array",
+      "description": "Add a competitor name and full HTTP or HTTPS page URL for each page to monitor (up to 100).",
+      "editor": "schemaBased",
+      "minItems": 1,
+      "maxItems": 100,
+      "prefill": [
+        {
+          "name": "Competitor A",
+          "url": "https://example.com/pricing"
+        }
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Competitor name",
+            "description": "Display name in results.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "editor": "textfield"
+          },
+          "url": {
+            "title": "Competitor URL",
+            "description": "Public HTTP or HTTPS page URL.",
+            "type": "string",
+            "pattern": "^https?://",
+            "maxLength": 2048,
+            "editor": "textfield"
+          }
+        },
+        "required": [
+          "name",
+          "url"
+        ]
+      }
+    }
+  },
+  "required": [
+    "client_id",
+    "competitors"
+  ]
+}
