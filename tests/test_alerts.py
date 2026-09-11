@@ -64,7 +64,7 @@ def test_missing_credentials(monkeypatch):
 
 def test_french_price_decrease():
     subject, body = render_alert(result(), "fr")
-    assert "Alerte ChangeWatch" in subject
+    assert subject == "[ChangeWatch] Test Shop - Variation de prix"
     assert "Test Shop a baissé son prix de 99 € à 79 €." in body
     assert "Variation : -20 € (-20,2 %)" in body
     assert "Baisse de prix" in body
@@ -73,7 +73,7 @@ def test_french_price_decrease():
 
 def test_english_price_increase():
     subject, body = render_alert(result("$79", "$99"), "en")
-    assert subject == "ChangeWatch Alert - Test Shop - Price change detected"
+    assert subject == "[ChangeWatch] Test Shop - Price change"
     assert "Test Shop increased its price from 79 USD to 99 USD." in body
     assert "Price increase" in body and "Difference: 20 USD" in body
 
@@ -96,7 +96,7 @@ def test_commercial_templates(concept, title, language):
     assert ("Action recommandée" if language == "fr" else "Recommended action") in body
     assert "New" in body
     if language == "en":
-        assert title in subject
+        assert title in body
 
 
 @pytest.mark.parametrize(

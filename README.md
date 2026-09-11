@@ -169,7 +169,7 @@ Every Dataset item retains all previous fields and adds:
 {
   "alert_triggered": true,
   "alert_sent": false,
-  "alert_subject": "ChangeWatch Alert - Test Shop - Price change detected",
+  "alert_subject": "[ChangeWatch] Test Shop - Price change",
   "alert_body": "Human-readable plain-text message...",
   "alert_html": "<!doctype html>...",
   "alert_threshold": 60,
@@ -205,7 +205,7 @@ This MVP makes one delivery attempt per qualifying result and does not automatic
 
 ### French example
 
-Subject: `Alerte ChangeWatch - Test Shop - Variation de prix détectée`
+Subject: `[ChangeWatch] Test Shop - Variation de prix`
 
 ```text
 🚨 Changement concurrent important détecté
@@ -232,7 +232,7 @@ Détecté le :
 
 ### English example
 
-Subject: `ChangeWatch Alert - Test Shop - Price change detected`
+Subject: `[ChangeWatch] Test Shop - Price change`
 
 ```text
 🚨 Important competitor change detected
@@ -266,22 +266,18 @@ Open [the complete French HTML example](examples/alert-fr.html) in a browser to 
 
 ```text
 ChangeWatch
-Alerte de veille concurrentielle
+Notification de veille concurrentielle
 ────────────────────────────────────────
-[ Baisse de prix ]
-Test Shop
-Concurrent surveillé
+Concurrent: Test Shop
+Changement détecté: Baisse de prix
 
-┌──────────────────────────────────────┐
-│ Ancien prix                          │
-│ 99 €                                 │
-│ Nouveau prix                         │
-│ 79 €                                 │
-│ Variation                            │
-│ -20 € (-20,2 %)                       │
-│ Importance                           │
-│ 100/100                              │
-└──────────────────────────────────────┘
+Ancien prix
+99 €
+Nouveau prix
+79 €
+Variation
+-20 € (-20,2 %)
+Importance: 100/100
 
 Résumé
 Test Shop a baissé son prix de 99 € à 79 €.
@@ -291,13 +287,15 @@ Vérifiez si cette variation est temporaire
 ou permanente et réévaluez votre
 positionnement tarifaire.
 
-[ Voir la page concurrente ]
+Voir la page surveillée (lien)
 ────────────────────────────────────────
-Détecté le : 2026-09-11T12:00:00+00:00
-Surveillance automatisée par ChangeWatch
+Heure de détection: 2026-09-11T12:00:00+00:00
+Notification automatique générée par ChangeWatch
 ```
 
-The white-background template uses system fonts, inline styles, fluid presentation tables, a 600px maximum content width and explicit direction labels. It requires no external CSS, images, fonts, tracking pixels or analytics. All dynamic content is HTML-escaped, including page excerpts and CTA attributes; only HTTP(S) URLs become CTA links. Rendering can vary between email clients; plain text is always sent alongside HTML. Sender configuration is unchanged.
+Subjects use `[ChangeWatch] <competitor> - <notification type>`: `Variation de prix` / `Price change`, `Changement détecté` / `Change detected` for commercial categories, and `Changement important` / `Important change` for generic updates. The plain-text body remains unchanged.
+
+The white-background template uses neutral typography, inline styles, fluid presentation tables and a 600px maximum content width. It has a compact header, plain direction labels and an underlined monitored-page link. There are no hero sections, decorative cards, banners, tracking pixels, external assets, social icons or analytics. Dynamic text and URL attributes remain escaped. Sender configuration and delivery behavior are unchanged. Rendering varies between email clients; plain text is always sent alongside HTML.
 
 ### Test without sending email
 

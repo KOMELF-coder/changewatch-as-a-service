@@ -116,7 +116,7 @@ def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[st
                 f"Change: {percent_text}",
             ]
             action = "Check whether this price change is temporary or permanent and review your pricing/positioning accordingly."
-        subject_type = "Variation de prix détectée" if french else "Price change detected"
+        subject_type = "Variation de prix" if french else "Price change"
     else:
         concept = next(
             (key for key in TEMPLATES if key in result.get("matched_concepts", [])), "generic"
@@ -125,7 +125,11 @@ def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[st
         title = fr_title if french else en_title
         summary = f"{name} {fr_summary if french else en_summary}."
         action = fr_action if french else en_action
-        subject_type = title
+        subject_type = (
+            ("Changement important" if french else "Important change")
+            if concept == "generic"
+            else ("Changement détecté" if french else "Change detected")
+        )
         # Quote page text rather than imply a machine translation of it.
         for change in result.get("changes", [])[:3]:
             details.extend(
@@ -134,7 +138,7 @@ def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[st
                     f"{'Après' if french else 'After'}: {change['added'] or '—'}",
                 ]
             )
-    subject = f"{'Alerte ChangeWatch' if french else 'ChangeWatch Alert'} - {name} - {subject_type}"
+    subject = f"[ChangeWatch] {name} - {subject_type}"
     if html:
         return subject, render_html(result, language, title, details, summary, action)
     lines = [
