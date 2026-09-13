@@ -117,6 +117,27 @@ def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[st
             ]
             action = "Check whether this price change is temporary or permanent and review your pricing/positioning accordingly."
         subject_type = "Variation de prix" if french else "Price change"
+    elif result.get("change_type") in {"new_product", "product_removed", "unavailable"}:
+        kind = result["change_type"]
+        labels = {
+            "new_product": ("New product detected", "Nouveau produit détecté"),
+            "product_removed": ("Product removed from page", "Produit retiré de la page"),
+            "unavailable": ("Product unavailable", "Produit indisponible"),
+        }
+        title = labels[kind][int(french)]
+        entity = (
+            result.get("entity_name")
+            or result.get("entity_id")
+            or result.get("entity_url")
+            or ("Produit" if french else "Product")
+        )
+        summary = f"{entity} : {title.lower()}."
+        action = (
+            "Vérifiez la fiche produit et sa disponibilité. Une absence de la page ne prouve pas un arrêt de commercialisation."
+            if french
+            else "Check the product page and availability. Absence from this page does not prove the product was discontinued."
+        )
+        subject_type = "Changement détecté" if french else "Change detected"
     else:
         concept = next(
             (key for key in TEMPLATES if key in result.get("matched_concepts", [])), "generic"
@@ -137,6 +158,26 @@ def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[st
                     f"{'Avant' if french else 'Before'}: {change['removed'] or '—'}",
                     f"{'Après' if french else 'After'}: {change['added'] or '—'}",
                 ]
+            )
+    if result.get("entity_name") or result.get("entity_id"):
+        entity = result.get("entity_name") or result["entity_id"]
+        details.insert(0, f"{'Produit' if french else 'Product'}: {entity}")
+        if result.get("change_type") == "price_change":
+            summary = f"{entity} : {old} → {new}."
+    if result.get("entity_url"):
+        details.append(f"{'Page produit' if french else 'Product page'}: {result['entity_url']}")
+    for event in result.get("entity_changes", [])[:10]:
+        if event.get("entity_name") != result.get("entity_name") or event[
+            "change_type"
+        ] != result.get("change_type"):
+            labels = {
+                "new_product": ("New product", "Nouveau produit"),
+                "product_removed": ("Product removed", "Produit retiré"),
+                "unavailable": ("Unavailable", "Indisponible"),
+                "price_change": ("Price change", "Variation de prix"),
+            }
+            details.append(
+                f"{labels[event['change_type']][int(french)]}: {event.get('entity_name') or event.get('entity_id') or event.get('entity_url')}"
             )
     subject = f"[ChangeWatch] {name} - {subject_type}"
     if html:

@@ -12,7 +12,8 @@ import httpx
 from bs4 import BeautifulSoup
 
 from .alerts import validate_alert_options
-from .prices import MONEY, detect_price_changes, price_score_floor
+from .entities import compare_entities, extract_entities
+from .prices import MONEY, detect_price_changes, price_score_floor, tokens
 
 MAX_BYTES = 5_000_000
 MAX_TEXT = 200_000
@@ -143,7 +144,9 @@ def extract_text(html: str) -> str:
     return text
 
 
-async def fetch_text(client: httpx.AsyncClient, url: str) -> str:
+async def fetch_text(
+    client: httpx.AsyncClient, url: str, *, include_entities: bool = False
+) -> str | dict:
     for attempt in range(3):
         try:
             async with asyncio.timeout(60):
@@ -157,9 +160,22 @@ async def fetch_text(client: httpx.AsyncClient, url: str) -> str:
                         body.extend(chunk)
                         if len(body) > MAX_BYTES:
                             raise ValueError("Page exceeds 5 MB decompressed limit")
-                    return extract_text(
-                        bytes(body).decode(response.encoding or "utf-8", errors="replace")
-                    )
+                    html = bytes(body).decode(response.encoding or "utf-8", errors="replace")
+                    text = extract_text(html)
+                    if include_entities:
+                        return {
+                            "text": text,
+                            "entities": extract_entities(html, str(response.url)),
+                            "requires_entities": sum(isinstance(t, tuple) for t in tokens(text)) > 1
+                            or bool(
+                                re.search(
+                                    r"data-(?:sku|product-id)|product-card|product-item|product-block|plp-product-list|schema.org/Product",
+                                    html,
+                                    re.I,
+                                )
+                            ),
+                        }
+                    return text
         except (httpx.TransportError, httpx.HTTPStatusError, TimeoutError) as exc:
             retryable = not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code in {
                 408,
@@ -197,7 +213,14 @@ def fragment_concepts(words: list[str], start: int, end: int) -> set[str]:
     return found
 
 
-def compare(previous: str | None, current: str) -> dict:
+def compare(
+    previous: str | None,
+    current: str,
+    *,
+    previous_entities: list | None = None,
+    current_entities: list | None = None,
+    require_entity_match: bool = False,
+) -> dict:
     current = normalize(current)
     previous = normalize(previous) if previous is not None else None
     base = {
@@ -208,6 +231,7 @@ def compare(previous: str | None, current: str) -> dict:
         "matched_concepts": [],
         "changes": [],
         "diff_truncated": False,
+        "entity_changes": [],
     }
     if previous is None:
         return {
@@ -216,7 +240,13 @@ def compare(previous: str | None, current: str) -> dict:
             "similarity_ratio": None,
             "change_summary": "Initial snapshot saved; no alert.",
         }
-    if previous == current:
+    entity_mode = require_entity_match or bool(previous_entities or current_entities)
+    entity_changes = (
+        compare_entities(previous_entities, current_entities)
+        if entity_mode and previous_entities is not None and current_entities is not None
+        else []
+    )
+    if previous == current and not entity_changes:
         return {
             **base,
             "status": "unchanged",
@@ -237,7 +267,15 @@ def compare(previous: str | None, current: str) -> dict:
         contexts.extend(
             [" ".join(old[max(0, i - 6) : j + 6]), " ".join(new[max(0, a - 6) : b + 6])]
         )
-    price_changes = detect_price_changes(previous, current)
+    price_changes = (
+        [event for event in entity_changes if event["change_type"] == "price_change"]
+        if entity_mode
+        else detect_price_changes(previous, current)
+    )
+    if any(event["change_type"] in {"new_product", "product_removed"} for event in entity_changes):
+        concepts.add("new offering")
+    if any(event["change_type"] == "unavailable" for event in entity_changes):
+        concepts.add("availability")
     if price_changes:
         concepts.add("pricing")
     matched = [name for name in CONCEPTS if name in concepts]
@@ -247,18 +285,29 @@ def compare(previous: str | None, current: str) -> dict:
         100,
         10 + round(20 * (1 - ratio)) + sum(CONCEPTS[k][0] for k in matched) + (20 if money else 0),
     )
-    price_fields = {}
+    price_fields = {"change_type": "generic_content_change"}
+    if entity_changes:
+        price_fields.update(entity_changes[0])
     if price_changes:
         # The top-level fields describe the most material detected price edit.
         primary = max(price_changes, key=price_score_floor)
         score = max(score, price_score_floor(primary))
         price_fields = {"change_type": "price_change", **primary, "price_changes": price_changes}
     bounded = [{k: v[:500] for k, v in change.items()} for change in changes[:10]]
-    excerpt = bounded[0]
+    excerpt = bounded[0] if bounded else {"removed": "", "added": ""}
     summary = f"{len(changes)} text change(s)"
     if matched:
         summary += f"; concepts: {', '.join(matched)}"
     summary += f". Before: {excerpt['removed'][:140] or '(none)'}. After: {excerpt['added'][:140] or '(none)'}."
+    if entity_changes:
+        summary += (
+            " Entities: "
+            + "; ".join(
+                f"{e['change_type']}: {e.get('entity_name') or e.get('entity_id') or e.get('entity_url')}"
+                for e in entity_changes[:10]
+            )
+            + "."
+        )
     return {
         **base,
         **price_fields,
@@ -270,4 +319,5 @@ def compare(previous: str | None, current: str) -> dict:
         "changes": bounded,
         "diff_truncated": bounded != changes,
         "change_summary": summary,
+        "entity_changes": entity_changes,
     }

@@ -51,7 +51,7 @@ def test_production_regression():
     ],
 )
 def test_no_price_pair(before, after):
-    assert "change_type" not in compare(before, after)
+    assert compare(before, after).get("change_type") != "price_change"
 
 
 def test_first_run_is_not_price_change():

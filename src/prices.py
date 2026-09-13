@@ -2,7 +2,6 @@
 
 import re
 from decimal import Decimal
-from difflib import SequenceMatcher
 
 # Comma or dot decimals, plus conventional comma/dot/space thousands grouping.
 NUMBER = r"(?:\d{1,3}(?:[ ,.\u00a0\u202f]\d{3})+|\d+)(?:[.,]\d{1,2})?"
@@ -37,32 +36,62 @@ def tokens(text: str) -> list:
 
 
 def detect_price_changes(previous: str, current: str) -> list[dict]:
+    """Fallback: pair only unique, identical textual entity labels.
+
+    Never match prices by their positions in a diff. A bare single price is
+    supported only when every non-monetary token is unchanged.
+    """
     old, new = tokens(previous), tokens(current)
+    if sum(isinstance(t, tuple) for t in old) == sum(isinstance(t, tuple) for t in new) == 1:
+        # With no DOM identity, changing a title/description may mean a different
+        # product. A single price alone does not establish continuity.
+        if [t for t in old if isinstance(t, str)] != [t for t in new if isinstance(t, str)]:
+            return []
+
+    def labelled(items):
+        pairs, label = {}, []
+        for token in items:
+            if isinstance(token, tuple):
+                key = " ".join(label).strip(" -:;|").casefold()
+                pairs.setdefault(key, []).append(token)
+                label = []
+            else:
+                label.append(token)
+        return pairs
+
+    before, after = labelled(old), labelled(new)
     changes = []
-    for kind, i, j, a, b in SequenceMatcher(None, old, new, autojunk=True).get_opcodes():
-        if kind != "replace":
+    for label in before:
+        if label not in after:
             continue
-        before = [token for token in old[i:j] if isinstance(token, tuple)]
-        after = [token for token in new[a:b] if isinstance(token, tuple)]
-        # Do not guess across additions/removals, currencies or ambiguous price lists.
-        if len(before) != 1 or len(after) != 1 or before[0][0] != after[0][0]:
+        if len(before[label]) != 1 or len(after[label]) != 1:
             continue
-        currency, old_price = before[0]
-        new_price = after[0][1]
-        if old_price == new_price:
+        if not label and (
+            len(before) != 1
+            or len(after) != 1
+            or [x for x in old if isinstance(x, str)] != [x for x in new if isinstance(x, str)]
+        ):
             continue
-        difference = new_price - old_price
-        percent = difference / old_price * 100 if old_price else None
-        changes.append(
-            {
-                "old_price": float(old_price),
-                "new_price": float(new_price),
-                "currency": currency,
-                "price_change_absolute": float(difference),
-                "price_change_percent": float(round(percent, 2)) if percent is not None else None,
-            }
-        )
+        change = price_difference(before[label][0], after[label][0])
+        if change:
+            changes.append(change)
     return changes
+
+
+def price_difference(before: tuple, after: tuple) -> dict | None:
+    currency, old_price = before
+    new_currency, new_price = after
+    if currency != new_currency or old_price == new_price:
+        return None
+    difference = new_price - old_price
+    percent = difference / old_price * 100 if old_price else None
+    return {
+        "old_price": float(old_price),
+        "new_price": float(new_price),
+        "currency": currency,
+        "price_change_absolute": float(difference),
+        "price_change_percent": float(round(percent, 2)) if percent is not None else None,
+    }
 
 
 def price_score_floor(change: dict) -> int:

@@ -14,6 +14,7 @@ from .monitor import (
     text_hash,
     validate_input,
 )
+from .prices import tokens
 
 STORE_NAME = "changewatch-snapshots-v1"
 
@@ -27,11 +28,18 @@ async def process_competitor(
     previous = await store.get_value(key)
     if previous is not None and (
         not isinstance(previous, dict)
-        or previous.get("schema_version") != 1
+        or previous.get("schema_version") not in {1, 2}
         or previous.get("client_id") != client_id
         or previous.get("url") != url
         or not isinstance(previous.get("text"), str)
         or previous.get("hash") != text_hash(previous["text"])
+        or (
+            previous.get("schema_version") == 2
+            and (
+                not isinstance(previous.get("entities"), list)
+                or not all(isinstance(entity, dict) for entity in previous["entities"])
+            )
+        )
     ):
         raise ValueError(f"Invalid snapshot record {key}; inspect it before resetting")
     result = {
@@ -42,7 +50,8 @@ async def process_competitor(
         "snapshot_key": key,
     }
     try:
-        current = await fetch_text(client, url)
+        page = await fetch_text(client, url, include_entities=True)
+        current = page["text"]
     except (httpx.HTTPError, TimeoutError, ValueError) as exc:
         # Avoid including full request URLs (which may carry query secrets) in errors.
         message = (
@@ -69,18 +78,35 @@ async def process_competitor(
         await apply_alert(result, alert_options, sender)
         await push_data(result)
         return False
-    result.update(compare(previous["text"] if previous else None, current))
+    result.update(
+        compare(
+            previous["text"] if previous else None,
+            current,
+            previous_entities=previous.get("entities") if previous else None,
+            current_entities=page["entities"],
+            require_entity_match=page["requires_entities"]
+            or bool(
+                previous
+                and (
+                    previous.get("requires_entities")
+                    or sum(isinstance(t, tuple) for t in tokens(previous["text"])) > 1
+                )
+            ),
+        )
+    )
     await apply_alert(result, alert_options, sender)
     await push_data(result)
     await store.set_value(
         key,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "client_id": client_id,
             "url": url,
             "text": current,
             "hash": result["current_hash"],
             "updated_at": result["detected_at"],
+            "entities": page["entities"],
+            "requires_entities": page["requires_entities"],
         },
     )
     Actor.log.info(
