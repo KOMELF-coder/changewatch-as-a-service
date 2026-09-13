@@ -92,7 +92,7 @@ On listing pages (multiple monetary values or recognized product markup), unmatc
 
 Simple single-product text such as `Prix : 99 €` → `Prix : 79 €` remains supported when all non-price text is unchanged. The standalone text-comparison fallback can match unique exact product labels, but never pairs prices merely because one was removed and another added. Price floors apply only to accepted same-entity changes; unmatched numeric edits receive ordinary content scoring.
 
-Multiple entity events are returned in `entity_changes`. Existing top-level fields remain: a price change takes priority, with the highest price-score tier selected; otherwise the first entity event is the primary change. `price_changes` contains only matched price changes. Entity-aware events add `entity_name`, `entity_url` and `entity_id` when available. Event types are `price_change`, `new_product`, `product_removed`, and `unavailable` (only with explicit stock evidence). A removal means absent from this page, not proof of discontinuation. Text/HTML alerts name the primary product and list other entity events; thresholds and delivery rules still apply.
+Multiple entity events are returned in `entity_changes`. Existing top-level fields remain: a price change takes priority, with the highest price-score tier selected; otherwise the first entity event is the primary change. `price_changes` contains only matched price changes. Entity-aware events add `entity_name`, `entity_url` and `entity_id` when available. Event types are `price_change`, `new_product`, `product_removed`, and `unavailable` (only with explicit stock evidence). A removal means absent from this page, not proof of discontinuation. Text/HTML alerts render every entity event equally, with one card or plain-text block per event; thresholds and delivery rules still apply.
 
 Snapshots now store schema version 2 with extracted entities, using the same store and keys. Version 1 snapshots remain readable. The first successful listing fetch upgrades its baseline and suppresses entity price alerts when the previous entity data is missing; subsequent runs compare entities normally. Fetch errors still preserve the baseline. Simple single-product snapshots continue to compare during this transition. Product metadata changes may produce an entity event even if normalized visible-text hashes match.
 
@@ -179,7 +179,7 @@ Every Dataset item retains all previous fields and adds:
 {
   "alert_triggered": true,
   "alert_sent": false,
-  "alert_subject": "[ChangeWatch] Test Shop - Price change",
+  "alert_subject": "[ChangeWatch] Test Shop - Price decrease",
   "alert_body": "Human-readable plain-text message...",
   "alert_html": "<!doctype html>...",
   "alert_threshold": 60,
@@ -189,7 +189,11 @@ Every Dataset item retains all previous fields and adds:
 
 For non-triggered items, subject/body/HTML are empty strings and both flags are false. Missing email still produces qualifying alert text and HTML, with `alert_sent: false` and `email_error: null`. Missing provider configuration produces a safe explanatory `email_error` and logs that delivery is disabled. Provider rejection or request failure is recorded without failing monitoring. `alert_sent: true` means Resend acknowledged the request with a message ID; it does not confirm inbox delivery, and later bounces are not tracked.
 
-Deterministic templates cover price increases/decreases, discounts/promotions, products/services, shipping/delivery, availability/stock and generic important content. Price templates take priority; otherwise the first matching category in the preceding list is used. Other categories use the generic template. French wording and numeric decimal separators are localized; quoted page excerpts remain in their original language. For multiple prices, the message describes the primary price in the structured result.
+Deterministic templates cover price increases/decreases, new and removed products, discounts/promotions, shipping/delivery, availability/stock and generic content changes. Every entry in `entity_changes` receives its own card in source order, with no ten-event truncation and no duplication of the top-level primary event. If there are no entity events, the existing page-level change becomes one block. These are presentation rules only: the Dataset's event list, top-level fields, scores and threshold decision are not modified.
+
+Subjects name the event when there is one (for example `[ChangeWatch] IKEA - Price decrease`), or use the count when there are several (`[ChangeWatch] Test Shop - 2 changements détectés`). Summaries include every event. Recommendations combine the applicable deterministic guidance, removing repeated identical advice. Both HTML and plain text reflect the full event list.
+
+French wording and decimal separators are localized; page excerpts remain in their source language. Detection timestamps use localized month names and retain the original timezone explicitly (for example `13 septembre 2026 à 15:05 UTC+02:00`). The renderer does not infer a recipient timezone or change the stored timestamp.
 
 ### Configure Resend
 
@@ -213,22 +217,23 @@ See [Resend sending API](https://resend.com/docs/api-reference/emails/send-email
 
 This MVP makes one delivery attempt per qualifying result and does not automatically retry or queue failed messages. A timeout can mean delivery is unconfirmed rather than definitely rejected. Failed delivery still writes the Dataset result and advances the successful page snapshot; an unchanged next run will not retry that email. Use `email_error` and the retained alert text for manual follow-up. Exactly-once delivery is not guaranteed across interruptions or overlapping runs.
 
-### French example
+### French plain-text example
 
-Subject: `[ChangeWatch] Test Shop - Variation de prix`
+Subject: `[ChangeWatch] Test Shop - Baisse de prix`
 
 ```text
-🚨 Changement concurrent important détecté
+ChangeWatch
+Veille concurrentielle automatisée
 
-Concurrent : Test Shop
-URL: https://example.com
+Test Shop
+1 changement détecté
 
-Type de changement : Baisse de prix
+[Baisse de prix]
 Ancien prix : 99 €
 Nouveau prix : 79 €
 Variation : -20 € (-20,2 %)
 
-Importance: 90/100
+Importance globale: 90/100
 
 Résumé :
 Test Shop a baissé son prix de 99 € à 79 €.
@@ -236,27 +241,31 @@ Test Shop a baissé son prix de 99 € à 79 €.
 Action recommandée :
 Vérifiez si cette variation est temporaire ou permanente et réévaluez votre positionnement tarifaire.
 
-Détecté le :
-2026-09-11T12:00:00+00:00
+Voir la page surveillée
+https://example.com
+
+13 septembre 2026 à 13:05 UTC
+Notification automatique générée par ChangeWatch
 ```
 
-### English example
+### English plain-text example
 
-Subject: `[ChangeWatch] Test Shop - Price change`
+Subject: `[ChangeWatch] Test Shop - Price increase`
 
 ```text
-🚨 Important competitor change detected
+ChangeWatch
+Automated competitor monitoring
 
-Competitor: Test Shop
-URL: https://example.com
+Test Shop
+1 change detected
 
-Change type: Price increase
+[Price increase]
 Previous price: 79 USD
 New price: 99 USD
 Difference: 20 USD
 Change: 25.32%
 
-Importance: 90/100
+Overall importance: 90/100
 
 Summary:
 Test Shop increased its price from 79 USD to 99 USD.
@@ -264,48 +273,22 @@ Test Shop increased its price from 79 USD to 99 USD.
 Recommended action:
 Check whether this price change is temporary or permanent and review your pricing/positioning accordingly.
 
-Detected at:
-2026-09-11T12:00:00+00:00
+View monitored page
+https://example.com
+
+September 13, 2026 at 13:05 UTC
+Automated notification generated by ChangeWatch
 ```
 
-Scores reflect the actual detected context and may be higher than these examples.
+### Multi-event HTML preview
 
-### HTML email preview
+The representative notification below contains a price decrease and a removed product. Both have equal visual treatment; the summary and recommendation cover both. The sample global score is 100. Production scoring is unchanged.
 
-Open [the complete French HTML example](examples/alert-fr.html) in a browser to preview the actual generated template. It shows a sample score of 100; production scores remain determined by the existing scoring engine. Narrow the browser window to inspect the fluid single-column layout.
+![French two-event ChangeWatch notification](examples/alert-fr.png)
 
-```text
-ChangeWatch
-Notification de veille concurrentielle
-────────────────────────────────────────
-Concurrent: Test Shop
-Changement détecté: Baisse de prix
+Open the generated [French HTML](examples/alert-fr.html), [English HTML](examples/alert-en.html), or [375px mobile preview](examples/alert-fr-mobile.png). These are local examples, not sent emails. Browser previews were checked at 760px and 375px widths; the mobile page has no horizontal overflow. Email-client rendering may differ.
 
-Ancien prix
-99 €
-Nouveau prix
-79 €
-Variation
--20 € (-20,2 %)
-Importance: 100/100
-
-Résumé
-Test Shop a baissé son prix de 99 € à 79 €.
-
-Action recommandée
-Vérifiez si cette variation est temporaire
-ou permanente et réévaluez votre
-positionnement tarifaire.
-
-Voir la page surveillée (lien)
-────────────────────────────────────────
-Heure de détection: 2026-09-11T12:00:00+00:00
-Notification automatique générée par ChangeWatch
-```
-
-Subjects use `[ChangeWatch] <competitor> - <notification type>`: `Variation de prix` / `Price change`, `Changement détecté` / `Change detected` for commercial categories, and `Changement important` / `Important change` for generic updates. The plain-text body remains unchanged.
-
-The white-background template uses neutral typography, inline styles, fluid presentation tables and a 600px maximum content width. It has a compact header, plain direction labels and an underlined monitored-page link. There are no hero sections, decorative cards, banners, tracking pixels, external assets, social icons or analytics. Dynamic text and URL attributes remain escaped. Sender configuration and delivery behavior are unchanged. Rendering varies between email clients; plain text is always sent alongside HTML.
+The layout uses a small brand header, competitor title, event count, lightly rounded neutral cards, a muted global score and an underlined monitored-page link. All CSS is inline and the fluid content is capped at 600px. There are no external images/fonts, trackers, gradients, promotional banners or marketing analytics in the email. Dynamic values are HTML-escaped, and CTA links remain restricted to HTTP(S). Plain-text fallback is still sent through Resend alongside HTML.
 
 ### Test without sending email
 

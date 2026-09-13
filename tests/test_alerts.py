@@ -64,7 +64,7 @@ def test_missing_credentials(monkeypatch):
 
 def test_french_price_decrease():
     subject, body = render_alert(result(), "fr")
-    assert subject == "[ChangeWatch] Test Shop - Variation de prix"
+    assert subject == "[ChangeWatch] Test Shop - Baisse de prix"
     assert "Test Shop a baissé son prix de 99 € à 79 €." in body
     assert "Variation : -20 € (-20,2 %)" in body
     assert "Baisse de prix" in body
@@ -73,7 +73,7 @@ def test_french_price_decrease():
 
 def test_english_price_increase():
     subject, body = render_alert(result("$79", "$99"), "en")
-    assert subject == "[ChangeWatch] Test Shop - Price change"
+    assert subject == "[ChangeWatch] Test Shop - Price increase"
     assert "Test Shop increased its price from 79 USD to 99 USD." in body
     assert "Price increase" in body and "Difference: 20 USD" in body
 

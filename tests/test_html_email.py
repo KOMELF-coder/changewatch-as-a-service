@@ -127,7 +127,8 @@ def test_no_alert_has_empty_html():
 
 
 @pytest.mark.parametrize(
-    "language,expected", [("fr", "Changement détecté"), ("en", "Change detected")]
+    "language,expected",
+    [("fr", "Modification de la livraison"), ("en", "Shipping/delivery change")],
 )
 def test_operational_subject(language, expected):
     result = alert("Livraison gratuite", "Livraison payante")
@@ -136,7 +137,8 @@ def test_operational_subject(language, expected):
 
 
 @pytest.mark.parametrize(
-    "language,expected", [("fr", "Changement important"), ("en", "Important change")]
+    "language,expected",
+    [("fr", "Modification importante du contenu"), ("en", "Important content change")],
 )
 def test_generic_subject(language, expected):
     subject, _ = render_alert(alert("Old text", "New text"), language)
@@ -146,12 +148,12 @@ def test_generic_subject(language, expected):
 def test_compact_notification_layout():
     _, html = render_alert(alert(), "fr", html=True)
     soup = BeautifulSoup(html, "html.parser")
-    assert "Notification de veille concurrentielle" in soup.get_text()
+    assert "Veille concurrentielle automatisée" in soup.get_text()
     assert "Heure de détection" in soup.get_text()
     assert "text-decoration:underline" in soup.a["style"]
     assert "background" not in soup.a["style"]
-    assert soup.h1 is None
-    assert "border-radius" not in html
+    assert soup.h1.get_text() == "Test Shop"
+    assert len(soup.select("[data-event-card]")) == 1
 
 
 def test_resend_receives_both_formats(monkeypatch):

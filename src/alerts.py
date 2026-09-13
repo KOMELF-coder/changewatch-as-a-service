@@ -3,6 +3,7 @@
 import logging
 
 from .email_delivery import send_email, valid_email
+from .email_presentation import display_time, event_count
 from .html_email import render_html
 
 log = logging.getLogger(__name__)
@@ -71,7 +72,7 @@ def number(value, french: bool) -> str:
     return text.replace(".", ",") if french else text
 
 
-def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[str, str]:
+def _event_content(result: dict, language: str) -> dict:
     french = language == "fr"
     name = " ".join(result["competitor"].split())
     details = []
@@ -116,7 +117,6 @@ def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[st
                 f"Change: {percent_text}",
             ]
             action = "Check whether this price change is temporary or permanent and review your pricing/positioning accordingly."
-        subject_type = "Variation de prix" if french else "Price change"
     elif result.get("change_type") in {"new_product", "product_removed", "unavailable"}:
         kind = result["change_type"]
         labels = {
@@ -131,13 +131,27 @@ def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[st
             or result.get("entity_url")
             or ("Produit" if french else "Product")
         )
-        summary = f"{entity} : {title.lower()}."
-        action = (
-            "Vérifiez la fiche produit et sa disponibilité. Une absence de la page ne prouve pas un arrêt de commercialisation."
-            if french
-            else "Check the product page and availability. Absence from this page does not prove the product was discontinued."
-        )
-        subject_type = "Changement détecté" if french else "Change detected"
+        summaries = {
+            "new_product": ("was added to the page", "a été ajouté à la page"),
+            "product_removed": ("was removed from the page", "a été retiré de la page"),
+            "unavailable": ("is now unavailable", "est désormais indisponible"),
+        }
+        summary = f"{entity} {summaries[kind][int(french)]}."
+        actions = {
+            "new_product": (
+                "Review the new product and compare it with your offering.",
+                "Examinez le nouveau produit et comparez-le à votre offre.",
+            ),
+            "product_removed": (
+                "Check whether the product removal reflects a stock shortage or a lasting withdrawal.",
+                "Vérifiez si le retrait du produit correspond à une rupture de stock ou à une suppression durable.",
+            ),
+            "unavailable": (
+                "Check the stock status and expected return to availability.",
+                "Vérifiez le stock et la date prévue de retour à la disponibilité.",
+            ),
+        }
+        action = actions[kind][int(french)]
     else:
         concept = next(
             (key for key in TEMPLATES if key in result.get("matched_concepts", [])), "generic"
@@ -146,11 +160,6 @@ def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[st
         title = fr_title if french else en_title
         summary = f"{name} {fr_summary if french else en_summary}."
         action = fr_action if french else en_action
-        subject_type = (
-            ("Changement important" if french else "Important change")
-            if concept == "generic"
-            else ("Changement détecté" if french else "Change detected")
-        )
         # Quote page text rather than imply a machine translation of it.
         for change in result.get("changes", [])[:3]:
             details.extend(
@@ -166,44 +175,111 @@ def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[st
             summary = f"{entity} : {old} → {new}."
     if result.get("entity_url"):
         details.append(f"{'Page produit' if french else 'Product page'}: {result['entity_url']}")
-    for event in result.get("entity_changes", [])[:10]:
-        if event.get("entity_name") != result.get("entity_name") or event[
-            "change_type"
-        ] != result.get("change_type"):
-            labels = {
-                "new_product": ("New product", "Nouveau produit"),
-                "product_removed": ("Product removed", "Produit retiré"),
-                "unavailable": ("Unavailable", "Indisponible"),
-                "price_change": ("Price change", "Variation de prix"),
-            }
-            details.append(
-                f"{labels[event['change_type']][int(french)]}: {event.get('entity_name') or event.get('entity_id') or event.get('entity_url')}"
+    return {"title": title, "details": details, "summary": summary, "action": action}
+
+
+def render_alert(result: dict, language: str, *, html: bool = False) -> tuple[str, str]:
+    french = language == "fr"
+    name = " ".join(result["competitor"].split())
+    events = result.get("entity_changes") or [result]
+    cards = []
+    concept_map = {
+        "promotion": "promotion",
+        "shipping": "shipping",
+        "availability": "availability",
+        "generic_content_change": "generic",
+    }
+    for event in events:
+        # Entity events are authoritative: never inherit another event's identity.
+        item = {**result, **event}
+        if event is not result:
+            for key in ("entity_name", "entity_url", "entity_id"):
+                item[key] = event.get(key)
+            item["changes"] = event.get("changes", [])
+            if "before" in event or "after" in event:
+                item["changes"] = [
+                    {"removed": event.get("before", ""), "added": event.get("after", "")}
+                ]
+            item["matched_concepts"] = [concept_map.get(event.get("change_type"), "generic")]
+        content = _event_content(item, language)
+        entity = item.get("entity_name") or item.get("entity_id") or ""
+        kind = item.get("change_type")
+        if kind == "new_product":
+            content["title"] = "Nouveau produit" if french else "New product"
+            if item.get("price") is not None:
+                content["details"].append(
+                    f"{'Prix' if french else 'Price'}: {item['price']} {item.get('currency') or ''}"
+                )
+        elif kind == "product_removed":
+            content["title"] = "Produit retiré" if french else "Product removed"
+        elif kind in {"availability", "unavailable"}:
+            content["title"] = "Disponibilité" if french else "Availability"
+        content["entity"] = entity
+        content["value"] = ""
+        content["delta"] = ""
+        if kind == "price_change":
+            currency = {"EUR": "€", "USD": "$", "GBP": "£"}.get(item["currency"], item["currency"])
+            content["value"] = (
+                f"{number(item['old_price'], french)} {currency} → {number(item['new_price'], french)} {currency}"
             )
-    subject = f"[ChangeWatch] {name} - {subject_type}"
+            percent = item.get("price_change_percent")
+            percent_text = (
+                number(percent, french) + (" %" if french else "%")
+                if percent is not None
+                else ("pourcentage non calculable" if french else "percentage unavailable")
+            )
+            content["delta"] = (
+                f"{number(item['price_change_absolute'], french)} {currency} ({percent_text})"
+            )
+            if entity:
+                verb = (
+                    ("a baissé" if item["new_price"] < item["old_price"] else "a augmenté")
+                    if french
+                    else ("decreased" if item["new_price"] < item["old_price"] else "increased")
+                )
+                content["summary"] = (
+                    f"{entity} {verb} {'de' if french else 'from'} {number(item['old_price'], french)} {currency} {'à' if french else 'to'} {number(item['new_price'], french)} {currency}."
+                )
+        elif entity and kind not in {"new_product", "product_removed", "unavailable"}:
+            content["summary"] = f"{entity} : {content['summary']}"
+        cards.append(content)
+    count = event_count(len(cards), french)
+    subject = f"[ChangeWatch] {name} - {count if len(cards) > 1 else cards[0]['title']}"
+    summary = " ".join(card["summary"] for card in cards)
+    action = " ".join(dict.fromkeys(card["action"] for card in cards))
     if html:
-        return subject, render_html(result, language, title, details, summary, action)
+        return subject, render_html(
+            result, language, cards[0]["title"], [], summary, action, cards=cards
+        )
     lines = [
-        "🚨 Changement concurrent important détecté"
-        if french
-        else "🚨 Important competitor change detected",
+        "ChangeWatch",
+        "Veille concurrentielle automatisée" if french else "Automated competitor monitoring",
         "",
-        f"{'Concurrent :' if french else 'Competitor:'} {name}",
-        f"URL: {result['url']}",
+        name,
+        count,
         "",
-        f"{'Type de changement :' if french else 'Change type:'} {title}",
-        *details,
-        "",
-        f"Importance: {result['importance_score']}/100",
-        "",
-        "Résumé :" if french else "Summary:",
-        summary,
-        "",
-        "Action recommandée :" if french else "Recommended action:",
-        action,
-        "",
-        "Détecté le :" if french else "Detected at:",
-        result["detected_at"],
     ]
+    for card in cards:
+        lines.extend([f"[{card['title']}]", *card["details"], ""])
+    lines.extend(
+        [
+            f"{'Importance globale' if french else 'Overall importance'}: {result['importance_score']}/100",
+            "",
+            "Résumé :" if french else "Summary:",
+            summary,
+            "",
+            "Action recommandée :" if french else "Recommended action:",
+            action,
+            "",
+            "Voir la page surveillée" if french else "View monitored page",
+            result["url"],
+            "",
+            display_time(result["detected_at"], french),
+            "Notification automatique générée par ChangeWatch"
+            if french
+            else "Automated notification generated by ChangeWatch",
+        ]
+    )
     return subject, "\n".join(lines)
 
 
