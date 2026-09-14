@@ -129,6 +129,12 @@ def compare_entities(previous: list[dict], current: list[dict]) -> list[dict]:
         before, after = old.get(key), new.get(key)
         entity = after or before
         fields = {k: entity.get(k) for k in ("entity_name", "entity_url", "entity_id")}
+        fields["change_confidence"] = {
+            "entity_id": 100,
+            "entity_url": 95,
+            "entity_name": 80,
+            "entity_context": 70,
+        }[key[0]]
         if before is None:
             events.append({"change_type": "new_product", **fields})
         elif after is None:
@@ -139,7 +145,7 @@ def compare_entities(previous: list[dict], current: list[dict]) -> list[dict]:
                     (before["currency"], Decimal(before["price"])),
                     (after["currency"], Decimal(after["price"])),
                 )
-                if difference:
+                if difference and fields["change_confidence"] >= 80:
                     events.append({"change_type": "price_change", **fields, **difference})
             if (
                 after.get("availability") == "unavailable"

@@ -128,7 +128,7 @@ def test_title_fallback():
 def test_dom_context_fallback_without_heading():
     before = '<div class="product-card">BILLY bookshelf 49.99 EUR</div>'
     after = '<div class="product-card">BILLY bookshelf 39.99 EUR</div>'
-    assert comparison(before, after)["change_type"] == "price_change"
+    assert comparison(before, after)["change_type"] != "price_change"
 
 
 def test_price_only_blocks_have_no_identity():

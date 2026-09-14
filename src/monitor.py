@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 
 from .alerts import validate_alert_options
 from .entities import compare_entities, extract_entities
+from .ignore_rules import filter_html
 from .prices import MONEY, detect_price_changes, price_score_floor, tokens
 
 MAX_BYTES = 5_000_000
@@ -63,10 +64,19 @@ def validate_input(data: object) -> tuple[str, list[dict]]:
     if (
         not isinstance(data, dict)
         or not required <= set(data)
-        or set(data) - required - {"client_email", "alert_threshold", "language"}
+        or set(data)
+        - required
+        - {
+            "client_email",
+            "alert_threshold",
+            "language",
+            "timezone",
+            "confirmation_runs",
+            "alert_cooldown_hours",
+        }
     ):
         raise ValueError(
-            "Input requires client_id and competitors, with optional client_email, alert_threshold and language"
+            "Input requires client_id and competitors; optional fields must match the input schema"
         )
     validate_alert_options(data)
     client = data["client_id"]
@@ -77,8 +87,12 @@ def validate_input(data: object) -> tuple[str, list[dict]]:
         raise ValueError("competitors must contain 1 to 100 entries")
     competitors, seen = [], set()
     for entry in entries:
-        if not isinstance(entry, dict) or set(entry) != {"name", "url"}:
-            raise ValueError("Each competitor must contain name and url only")
+        if (
+            not isinstance(entry, dict)
+            or not {"name", "url"} <= set(entry)
+            or set(entry) - {"name", "url", "ignore_selectors", "ignore_text_patterns"}
+        ):
+            raise ValueError("Each competitor requires name and url, with optional ignore rules")
         name, url = entry["name"], entry["url"]
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 200:
             raise ValueError("Competitor name must contain 1 to 200 characters")
@@ -88,7 +102,17 @@ def validate_input(data: object) -> tuple[str, list[dict]]:
         if url in seen:
             raise ValueError("Duplicate competitor URL; use one entry per page")
         seen.add(url)
-        competitors.append({"name": name.strip(), "url": url})
+        rules = {}
+        for field in ("ignore_selectors", "ignore_text_patterns"):
+            values = entry.get(field, [])
+            if (
+                not isinstance(values, list)
+                or len(values) > 50
+                or any(not isinstance(v, str) or len(v) > 500 for v in values)
+            ):
+                raise ValueError(f"{field} must contain at most 50 strings of up to 500 characters")
+            rules[field] = values
+        competitors.append({"name": name.strip(), "url": url, **rules})
     return client.strip(), competitors
 
 
@@ -145,7 +169,12 @@ def extract_text(html: str) -> str:
 
 
 async def fetch_text(
-    client: httpx.AsyncClient, url: str, *, include_entities: bool = False
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    include_entities: bool = False,
+    ignore_selectors=None,
+    ignore_text_patterns=None,
 ) -> str | dict:
     for attempt in range(3):
         try:
@@ -161,6 +190,7 @@ async def fetch_text(
                         if len(body) > MAX_BYTES:
                             raise ValueError("Page exceeds 5 MB decompressed limit")
                     html = bytes(body).decode(response.encoding or "utf-8", errors="replace")
+                    html = filter_html(html, ignore_selectors or [], ignore_text_patterns or [])
                     text = extract_text(html)
                     if include_entities:
                         return {
@@ -320,4 +350,6 @@ def compare(
         "diff_truncated": bounded != changes,
         "change_summary": summary,
         "entity_changes": entity_changes,
+        "ambiguous_numeric_change": not price_changes
+        and any(re.search(r"\d", part) for change in changes for part in change.values()),
     }

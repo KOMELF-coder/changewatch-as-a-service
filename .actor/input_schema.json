@@ -46,6 +46,30 @@
             "pattern": "^https?://",
             "maxLength": 2048,
             "editor": "textfield"
+          },
+          "ignore_selectors": {
+            "title": "Ignore CSS selectors",
+            "type": "array",
+            "editor": "stringList",
+            "description": "Optional selectors removed before text and product extraction, e.g. .cookie-banner or .carousel. Invalid rules are skipped with a warning.",
+            "default": [],
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "ignore_text_patterns": {
+            "title": "Ignore text patterns",
+            "type": "array",
+            "editor": "stringList",
+            "description": "Optional regular expressions removed from individual visible text nodes. Invalid patterns are skipped with a warning. Use narrow patterns to avoid removing product information.",
+            "default": [],
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "maxLength": 500
+            }
           }
         },
         "required": [
@@ -85,6 +109,31 @@
         "Français"
       ],
       "default": "en"
+    },
+    "timezone": {
+      "title": "Client timezone",
+      "type": "string",
+      "editor": "textfield",
+      "default": "Europe/Paris",
+      "description": "IANA timezone for email timestamps, for example Europe/Paris, America/New_York or UTC. Dataset timestamps remain UTC."
+    },
+    "confirmation_runs": {
+      "title": "Confirmation runs (optional override)",
+      "type": "integer",
+      "editor": "number",
+      "minimum": 1,
+      "maximum": 10,
+      "sectionCaption": "Advanced reliability settings",
+      "description": "Leave unset for automatic defaults: 1 for stable ID/URL entity changes, 2 for other changes. Set only to override all change types."
+    },
+    "alert_cooldown_hours": {
+      "title": "Identical alert cooldown (hours)",
+      "type": "integer",
+      "editor": "number",
+      "minimum": 1,
+      "maximum": 720,
+      "default": 24,
+      "description": "Suppress identical sent fingerprints during this period unless an intervening accepted state makes it a genuine new change. Unchanged pages never resend automatically."
     }
   },
   "required": [

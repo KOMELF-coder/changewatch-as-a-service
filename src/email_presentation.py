@@ -1,6 +1,7 @@
 """Presentation-only helpers shared by HTML and plain-text notifications."""
 
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 
 def event_count(count: int, french: bool) -> str:
@@ -9,12 +10,14 @@ def event_count(count: int, french: bool) -> str:
     return f"{count} change{'s' if count != 1 else ''} detected"
 
 
-def display_time(value: str, french: bool) -> str:
-    """Localize wording while preserving the timestamp's explicit time zone."""
+def display_time(value: str, french: bool, client_timezone: str = "Europe/Paris") -> str:
+    """Convert the timestamp to the client's timezone and localize wording."""
     try:
         timestamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (ValueError, TypeError):
         return str(value)
+    timestamp = timestamp.replace(tzinfo=timezone.utc) if timestamp.tzinfo is None else timestamp
+    timestamp = timestamp.astimezone(ZoneInfo(client_timezone))
     months = (
         "janvier février mars avril mai juin juillet août septembre octobre novembre décembre"
         if french
@@ -25,6 +28,5 @@ def display_time(value: str, french: bool) -> str:
         if french
         else f"{months[timestamp.month - 1]} {timestamp.day}, {timestamp.year} at"
     )
-    zone = timestamp.strftime("%z")
-    suffix = (" UTC" if zone == "+0000" else f" UTC{zone[:3]}:{zone[3:]}") if zone else ""
+    suffix = f" {client_timezone}"
     return f"{date} {timestamp:%H:%M}{suffix}"

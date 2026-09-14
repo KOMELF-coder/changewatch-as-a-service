@@ -190,7 +190,7 @@ def test_email_failure_does_not_crash_monitor(caplog):
                 store,
                 client,
                 output,
-                {"client_email": "client@example.com", "language": "fr"},
+                {"client_email": "client@example.com", "language": "fr", "confirmation_runs": 1},
                 sender,
             )
         alert = output.call_args.args[0]

@@ -148,7 +148,7 @@ def test_lifecycle():
             "unchanged",
             "changed",
             "error",
-            "unchanged",
+            "changed",
         ]
 
     asyncio.run(run())
@@ -172,7 +172,7 @@ def test_dataset_failure():
                     client,
                     AsyncMock(side_effect=RuntimeError("storage unavailable")),
                 )
-        assert store.records == {}
+        assert not any(key.startswith("snapshot-") for key in store.records)
 
     asyncio.run(run())
 

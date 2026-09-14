@@ -1,121 +1,13 @@
-"""Apify lifecycle and persistent snapshot processing."""
-
-from datetime import datetime, timezone
+"""Apify Actor lifecycle."""
 
 import httpx
 from apify import Actor
 
-from .alerts import apply_alert, validate_alert_options
-from .monitor import (
-    USER_AGENT,
-    compare,
-    fetch_text,
-    snapshot_key,
-    text_hash,
-    validate_input,
-)
-from .prices import tokens
+from .alerts import validate_alert_options
+from .monitor import USER_AGENT, validate_input
+from .processing import process_competitor as process_competitor
 
 STORE_NAME = "changewatch-snapshots-v1"
-
-
-async def process_competitor(
-    client_id: str, competitor: dict, store, client, push_data, alert_options=None, sender=None
-) -> bool:
-    """Emit before advancing baseline; storage/output failures fail the run."""
-    url = competitor["url"]
-    key = snapshot_key(client_id, url)
-    previous = await store.get_value(key)
-    if previous is not None and (
-        not isinstance(previous, dict)
-        or previous.get("schema_version") not in {1, 2}
-        or previous.get("client_id") != client_id
-        or previous.get("url") != url
-        or not isinstance(previous.get("text"), str)
-        or previous.get("hash") != text_hash(previous["text"])
-        or (
-            previous.get("schema_version") == 2
-            and (
-                not isinstance(previous.get("entities"), list)
-                or not all(isinstance(entity, dict) for entity in previous["entities"])
-            )
-        )
-    ):
-        raise ValueError(f"Invalid snapshot record {key}; inspect it before resetting")
-    result = {
-        "client_id": client_id,
-        "competitor": competitor["name"],
-        "url": url,
-        "detected_at": datetime.now(timezone.utc).isoformat(),
-        "snapshot_key": key,
-    }
-    try:
-        page = await fetch_text(client, url, include_entities=True)
-        current = page["text"]
-    except (httpx.HTTPError, TimeoutError, ValueError) as exc:
-        # Avoid including full request URLs (which may carry query secrets) in errors.
-        message = (
-            f"HTTP {exc.response.status_code}"
-            if isinstance(exc, httpx.HTTPStatusError)
-            else type(exc).__name__
-        )
-        Actor.log.warning("Page fetch failed for snapshot %s: %s", key, message)
-        result.update(
-            {
-                "status": "error",
-                "changed": False,
-                "importance_score": 0,
-                "change_summary": "Page could not be processed; previous snapshot preserved.",
-                "previous_hash": previous["hash"] if previous else None,
-                "current_hash": None,
-                "similarity_ratio": None,
-                "matched_concepts": [],
-                "changes": [],
-                "diff_truncated": False,
-                "error": message,
-            }
-        )
-        await apply_alert(result, alert_options, sender)
-        await push_data(result)
-        return False
-    result.update(
-        compare(
-            previous["text"] if previous else None,
-            current,
-            previous_entities=previous.get("entities") if previous else None,
-            current_entities=page["entities"],
-            require_entity_match=page["requires_entities"]
-            or bool(
-                previous
-                and (
-                    previous.get("requires_entities")
-                    or sum(isinstance(t, tuple) for t in tokens(previous["text"])) > 1
-                )
-            ),
-        )
-    )
-    await apply_alert(result, alert_options, sender)
-    await push_data(result)
-    await store.set_value(
-        key,
-        {
-            "schema_version": 2,
-            "client_id": client_id,
-            "url": url,
-            "text": current,
-            "hash": result["current_hash"],
-            "updated_at": result["detected_at"],
-            "entities": page["entities"],
-            "requires_entities": page["requires_entities"],
-        },
-    )
-    Actor.log.info(
-        "Processed snapshot %s: %s (score %s)",
-        key,
-        result["status"],
-        result["importance_score"],
-    )
-    return True
 
 
 async def main() -> None:

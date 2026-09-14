@@ -48,6 +48,7 @@ def test_sdk_persistence(tmp_path):
             ("initialized", b"<p>Monthly plan price $10</p>"),
             ("unchanged", b"<p>Monthly plan price $10</p>"),
             ("changed", b"<p>Monthly plan price $20</p>"),
+            ("changed", b"<p>Monthly plan price $20</p>"),
         ]:
             Handler.page = page
             result = subprocess.run(
@@ -69,11 +70,18 @@ def test_sdk_persistence(tmp_path):
                 assert alert["new_price"] == 20
                 assert alert["price_change_percent"] == 100
                 assert alert["importance_score"] >= 90
+                if alert["confirmation_status"] == "pending":
+                    assert alert["confirmation_count"] == 1
+                    assert not alert["alert_triggered"]
+                    continue
+                assert alert["confirmation_status"] == "confirmed"
+                assert alert["confirmation_count"] == 2
                 assert alert["alert_triggered"]
                 assert not alert["alert_sent"]
                 assert alert["alert_body"]
                 assert '<html lang="en">' in alert["alert_html"]
                 assert alert["email_error"] is None
+        assert alert["confirmation_status"] == "confirmed"
     finally:
         server.shutdown()
         server.server_close()

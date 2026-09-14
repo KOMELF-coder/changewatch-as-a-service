@@ -134,7 +134,7 @@ def test_event_text_is_escaped():
 
 def test_localized_timestamp_preserves_zone():
     value = "2026-09-13T15:05:00+02:00"
-    assert display_time(value, True) == "13 septembre 2026 à 15:05 UTC+02:00"
-    assert display_time(value, False) == "September 13, 2026 at 15:05 UTC+02:00"
-    assert display_time("2026-09-13T13:05:00Z", True).endswith("13:05 UTC")
+    assert display_time(value, True) == "13 septembre 2026 à 15:05 Europe/Paris"
+    assert display_time(value, False) == "September 13, 2026 at 15:05 Europe/Paris"
+    assert display_time("2026-09-13T13:05:00Z", True, "UTC").endswith("13:05 UTC")
     assert display_time("unknown", True) == "unknown"

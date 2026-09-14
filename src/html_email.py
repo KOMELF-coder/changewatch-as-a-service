@@ -15,6 +15,7 @@ def render_html(
     action: str,
     *,
     cards: list[dict] | None = None,
+    timezone: str = "Europe/Paris",
 ) -> str:
     french = language == "fr"
     cards = cards or [{"title": title, "entity": "", "details": details, "value": "", "delta": ""}]
@@ -68,6 +69,6 @@ def render_html(
 <tr><td style="padding:0 0 16px;"><h2 style="font-size:13px;margin:0 0 6px;font-weight:700;">{"Résumé" if french else "Summary"}</h2><p style="margin:0;font-size:14px;overflow-wrap:anywhere;">{escape(summary)}</p></td></tr>
 <tr><td style="padding:0 0 20px;"><h2 style="font-size:13px;margin:0 0 6px;font-weight:700;">{"Action recommandée" if french else "Recommended action"}</h2><p style="margin:0;font-size:14px;overflow-wrap:anywhere;">{escape(action)}</p></td></tr>
 <tr><td style="padding:0 0 24px;">{link}</td></tr>
-<tr><td style="padding:16px 0 0;border-top:1px solid #e5e7eb;font-size:11px;color:#64748b;"><div>{"Heure de détection" if french else "Detection time"}: {escape(display_time(result["detected_at"], french))}</div><div style="margin-top:4px;">{footer}</div></td></tr>
+<tr><td style="padding:16px 0 0;border-top:1px solid #e5e7eb;font-size:11px;color:#64748b;"><div>{"Heure de détection" if french else "Detection time"}: {escape(display_time(result["detected_at"], french, timezone))}</div><div style="margin-top:4px;">{footer}</div></td></tr>
 </table></td></tr></table>
 </body></html>'''
