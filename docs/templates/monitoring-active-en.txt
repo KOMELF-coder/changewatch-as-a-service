@@ -1,0 +1,13 @@
+Subject: ChangeWatch — initial check complete
+
+Hello {{client_name}},
+
+The initial check of the {{page_count}} agreed pages succeeded on {{baseline_completed_at}} ({{timezone}}). Their initial baselines are saved; initialization does not generate a change alert.
+
+Monitoring is active at this frequency: {{monitoring_frequency}}. Next scheduled run: {{next_run_at}} ({{timezone}}).
+
+You will receive an email for meaningful changes that meet the {{alert_threshold}}/100 threshold and pass reliability checks. Changes requiring confirmation may be reported after an additional observation.
+
+For page or recipient corrections, contact {{support_contact}}.
+
+ChangeWatch

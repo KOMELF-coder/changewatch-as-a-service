@@ -8,10 +8,11 @@
     "client_id": {
       "title": "Client ID",
       "type": "string",
-      "description": "Stable identifier isolating this client's snapshots.",
+      "description": "Unique, permanent lowercase kebab-case identifier, e.g. client-acme. ASCII letters/digits separated by single hyphens; no spaces. Invalid forms are rejected, never silently renamed. Reusing an ID shares snapshots.",
       "editor": "textfield",
       "minLength": 1,
       "maxLength": 200,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
       "prefill": "demo-client"
     },
     "competitors": {

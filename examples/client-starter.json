@@ -1,0 +1,29 @@
+{
+  "client_id": "client-example-starter",
+  "client_email": "alerts@example.com",
+  "language": "fr",
+  "timezone": "Europe/Paris",
+  "alert_threshold": 60,
+  "competitors": [
+    {
+      "name": "Example competitor 1",
+      "url": "https://shop-1.example.com/products"
+    },
+    {
+      "name": "Example competitor 2",
+      "url": "https://shop-2.example.com/products"
+    },
+    {
+      "name": "Example competitor 3",
+      "url": "https://shop-3.example.com/products"
+    },
+    {
+      "name": "Example competitor 4",
+      "url": "https://shop-4.example.com/products"
+    },
+    {
+      "name": "Example competitor 5",
+      "url": "https://shop-5.example.com/products"
+    }
+  ]
+}

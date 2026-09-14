@@ -1,0 +1,13 @@
+Objet : Votre veille ChangeWatch est active
+
+Bonjour {{client_name}},
+
+Votre veille ChangeWatch est active. Nous surveillons {{page_count}} pages concurrentes à la fréquence suivante : {{monitoring_frequency}} (fuseau : {{timezone}}).
+
+Les premières références ont été enregistrées. Les variations de prix, ajouts ou retraits de produits, promotions et changements de livraison ou de disponibilité peuvent déclencher une alerte.
+
+Seuls les changements significatifs atteignant le seuil de {{alert_threshold}}/100 et satisfaisant nos contrôles de fiabilité génèrent un email. Certains changements doivent être observés plusieurs fois avant confirmation. L'absence d'email ne signifie pas que la veille est arrêtée.
+
+Les alertes sont des signaux de veille : vérifiez les informations sur la page source avant une décision importante. Pour modifier une page ou signaler un problème, contactez {{support_contact}}.
+
+ChangeWatch

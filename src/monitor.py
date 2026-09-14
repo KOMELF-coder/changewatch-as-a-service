@@ -80,8 +80,17 @@ def validate_input(data: object) -> tuple[str, list[dict]]:
         )
     validate_alert_options(data)
     client = data["client_id"]
-    if not isinstance(client, str) or not 1 <= len(client.strip()) <= 200:
-        raise ValueError("client_id must be a nonempty string of up to 200 characters")
+    # Accept only the canonical form: case-folding/slugifying an existing ID
+    # could silently attach a customer to another customer's snapshot namespace.
+    if (
+        not isinstance(client, str)
+        or not 1 <= len(client) <= 200
+        or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", client) is None
+    ):
+        raise ValueError(
+            "client_id must be lowercase kebab-case (1–200 ASCII letters/digits/hyphens); "
+            "no surrounding whitespace or automatic renaming"
+        )
     entries = data["competitors"]
     if not isinstance(entries, list) or not 1 <= len(entries) <= 100:
         raise ValueError("competitors must contain 1 to 100 entries")
@@ -113,7 +122,7 @@ def validate_input(data: object) -> tuple[str, list[dict]]:
                 raise ValueError(f"{field} must contain at most 50 strings of up to 500 characters")
             rules[field] = values
         competitors.append({"name": name.strip(), "url": url, **rules})
-    return client.strip(), competitors
+    return client, competitors
 
 
 def text_hash(text: str) -> str:

@@ -1,0 +1,69 @@
+{
+  "client_id": "client-example-business",
+  "client_email": "alerts@example.com",
+  "language": "fr",
+  "timezone": "Europe/Paris",
+  "alert_threshold": 60,
+  "competitors": [
+    {
+      "name": "Example competitor 1",
+      "url": "https://shop-1.example.com/products"
+    },
+    {
+      "name": "Example competitor 2",
+      "url": "https://shop-2.example.com/products"
+    },
+    {
+      "name": "Example competitor 3",
+      "url": "https://shop-3.example.com/products"
+    },
+    {
+      "name": "Example competitor 4",
+      "url": "https://shop-4.example.com/products"
+    },
+    {
+      "name": "Example competitor 5",
+      "url": "https://shop-5.example.com/products"
+    },
+    {
+      "name": "Example competitor 6",
+      "url": "https://shop-6.example.com/products"
+    },
+    {
+      "name": "Example competitor 7",
+      "url": "https://shop-7.example.com/products"
+    },
+    {
+      "name": "Example competitor 8",
+      "url": "https://shop-8.example.com/products"
+    },
+    {
+      "name": "Example competitor 9",
+      "url": "https://shop-9.example.com/products"
+    },
+    {
+      "name": "Example competitor 10",
+      "url": "https://shop-10.example.com/products"
+    },
+    {
+      "name": "Example competitor 11",
+      "url": "https://shop-11.example.com/products"
+    },
+    {
+      "name": "Example competitor 12",
+      "url": "https://shop-12.example.com/products"
+    },
+    {
+      "name": "Example competitor 13",
+      "url": "https://shop-13.example.com/products"
+    },
+    {
+      "name": "Example competitor 14",
+      "url": "https://shop-14.example.com/products"
+    },
+    {
+      "name": "Example competitor 15",
+      "url": "https://shop-15.example.com/products"
+    }
+  ]
+}

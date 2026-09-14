@@ -2,6 +2,21 @@
 
 A Python Apify Actor for competitor page monitoring: URL → normalized snapshot → comparison → deterministic importance score → structured Dataset result. No external AI service is required.
 
+## Operating ChangeWatch for customers
+
+Use one saved Apify Task per customer, named `changewatch-<client_id>`, and one daily schedule targeting that Task. The standard input contract is `client_id`, `client_email`, `language`, `timezone`, `alert_threshold` and `competitors`. Client IDs must be unique, permanent lowercase ASCII kebab-case (up to 200 characters). Noncanonical IDs are rejected rather than silently normalized; existing noncanonical IDs require an explicit transition to a verified unused ID and a fresh baseline. Valid existing IDs retain their snapshots.
+
+- [Client onboarding and URL/contact change procedures](docs/CLIENT_ONBOARDING.md): five-minute operator setup checklist, canonical input and defaults.
+- [Operator runbook](docs/OPERATOR_RUNBOOK.md): failures, delivery, single-URL resets and weekly review.
+- [Seven-day trial workflow](docs/TRIAL_WORKFLOW.md): honest monitoring evidence and paid continuation.
+- [Client offboarding](docs/CLIENT_OFFBOARDING.md): stop triggers and handle client-scoped storage under the agreed policy.
+- [Starter configuration: 5 URLs](examples/client-starter.json) and [Business configuration: 15 URLs](examples/client-business.json): reserved example domains; replace them before running.
+- Manual templates: [welcome FR](docs/templates/welcome-fr.txt), [welcome EN](docs/templates/welcome-en.txt), [monitoring active FR](docs/templates/monitoring-active-fr.txt), [monitoring active EN](docs/templates/monitoring-active-en.txt). Replace every `{{placeholder}}`, verify facts and send manually only after successful activation.
+
+Default policy: daily monitoring, threshold 60, Europe/Paris for French customers, automatic confirmation, 24-hour identical-alert cooldown, and internal notifications when `OPERATOR_EMAIL` is configured with a working email provider. Five minutes is an operator setup target, not a guarantee that all initial fetches finish within five minutes.
+
+ChangeWatch monitors public URLs supplied by customers/operators. Continued scrapeability is not guaranteed. Product disappearance is not proof of discontinuation, and alerts are monitoring signals rather than guaranteed business facts. Customers should verify material decisions at source. These are product boundaries, not a legal retention policy.
+
 ## Deploy on Apify
 
 1. Create an Actor in Apify Console and choose **Git repository** in Source.
@@ -25,7 +40,7 @@ The input UI provides a Client ID and individually editable competitor name/URL 
 }
 ```
 
-Supply 1–100 distinct HTTP(S) URLs. Client IDs and names must be nonempty and at most 200 characters; URLs at most 2,048 characters without credentials. Invalid input fails before processing. Fragments/default ports are removed and hostnames lowercased. Paths/query strings remain significant. Duplicate canonical URLs are rejected.
+Supply 1–100 distinct HTTP(S) URLs. Client IDs must be lowercase kebab-case and at most 200 characters; competitor names must be nonempty and at most 200 characters. URLs may contain at most 2,048 characters without credentials. Invalid input fails before processing. Fragments/default ports are removed and hostnames lowercased. Paths/query strings remain significant. Duplicate canonical URLs are rejected.
 
 ## Output
 

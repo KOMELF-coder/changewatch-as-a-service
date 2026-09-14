@@ -1,0 +1,13 @@
+Objet : ChangeWatch — première vérification terminée
+
+Bonjour {{client_name}},
+
+La première vérification des {{page_count}} pages convenues a réussi le {{baseline_completed_at}} ({{timezone}}). Leurs références initiales sont enregistrées ; cette initialisation ne génère pas d'alerte de changement.
+
+La veille est active à la fréquence {{monitoring_frequency}}. Prochaine exécution prévue : {{next_run_at}} ({{timezone}}).
+
+Vous recevrez un email pour les changements significatifs qui atteignent le seuil de {{alert_threshold}}/100 et passent les contrôles de fiabilité. Les changements nécessitant confirmation peuvent être signalés après une observation supplémentaire.
+
+Pour toute correction de page ou de destinataire : {{support_contact}}.
+
+ChangeWatch
