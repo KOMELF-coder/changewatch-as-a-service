@@ -57,7 +57,7 @@ Check `collection_pages_fetched`, `collection_entities_found`, `collection_expan
 | `not_applicable` | Single-page content without collection signals; ordinary monitoring continues. |
 | `complete` | All discovered HTML pagination exhausted. Compare observed count with the site's advertised count manually; hidden APIs are not inferred. |
 | `unsupported` | Visible load-more cannot be followed as a public HTML URL, or entities are not identifiable. Ask for a usable public paginated collection/product URL; do not reverse-engineer private APIs or bypass controls. |
-| `limited` | 10 pages / 500 entities / 25 MB / 90 seconds bounded the scan. Review the reason. Prefer narrower category URLs instead of claiming the whole catalog is covered. |
+| `limited` | 20 pages / 500 entities / 25 MB / 90 seconds bounded the scan. Review the reason. Prefer narrower category URLs instead of claiming the whole catalog is covered. |
 | `partial` | Extra-page failure, repetition, no new identities or a suspicious coverage drop. Inspect the source and safe logs. Missing known products are protected from removal alerts; confident observed price changes may still alert. |
 | `error` | Initial root fetch failed; diagnose access/timeouts as above. Last valid snapshot is preserved. |
 

@@ -7,10 +7,10 @@ from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
-from .entities import BLOCKS, identity
+from .entities import BLOCKS, fallback_blocks, identity
 from .reliability import digest
 
-MAX_PAGES = 10
+MAX_PAGES = 20
 MAX_ENTITIES = 500
 MAX_BYTES = 25_000_000
 MAX_SECONDS = 90
@@ -98,12 +98,15 @@ def collection_text(entities: list[dict], context: str = "") -> str:
     ).strip()
 
 
-def collection_context(html: str) -> str:
+def collection_context(html: str, base_url: str = "") -> str:
     """Keep first-page commercial copy outside product blocks and pagination."""
     from .monitor import extract_text
 
     soup = BeautifulSoup(html, "html.parser")
-    for node in soup.select(BLOCKS):
+    for node in soup.select('script, style, nav, footer, [hidden], [aria-hidden="true"]'):
+        if node.parent:
+            node.decompose()
+    for node in [*soup.select(BLOCKS), *fallback_blocks(soup, base_url)]:
         if node.parent:
             node.decompose()
     for node in soup.select("a, button, link"):
@@ -222,7 +225,7 @@ async def fetch_collection(
         status, reason = "limited", f"Stopped at max_collection_entities={max_entities}"
     if not detected:
         status, reason = "not_applicable", "Single-page content; no collection pagination detected"
-    context = collection_context(first.get("_html", "")) if detected else ""
+    context = collection_context(first.get("_html", ""), first.get("_url", url)) if detected else ""
     return {
         **first,
         "entities": entities if detected else first["entities"],
