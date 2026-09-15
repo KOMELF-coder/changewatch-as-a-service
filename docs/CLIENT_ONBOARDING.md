@@ -46,7 +46,8 @@ Existing valid IDs and snapshot keys are unchanged. A legacy ID outside this for
 | Identical-alert cooldown | 24 hours |
 | Technical notifications | Enabled when `OPERATOR_EMAIL` and working Resend configuration exist |
 
-Leave `confirmation_runs` unset. Two daily observations can delay a generic alert by a day. Before onboarding clients, verify shared Resend configuration and an internal delivery test once; do not change shared credentials for each client. Welcome and activation templates are sent manually; ChangeWatch sends only change alerts and optional operator technical notices.
+Leave `confirmation_runs` unset. Two daily observations can delay a generic alert by a day. Before onboarding clients, verify shared Resend configuration and an internal delivery test once; do not change shared credentials for each client. Welcome and activation templates are sent manually; ChangeWatch sends change alerts, weekly activity reports and optional operator technical notices.
+Weekly activity reports now also run automatically: after seven elapsed days, a quiet period without accepted significant alerts can generate one client report. Collection pagination is expanded within bounded limits; verify coverage metadata before promising catalog-wide monitoring. No additional schedule or Task fields are required.
 
 ## Changes to an existing customer
 

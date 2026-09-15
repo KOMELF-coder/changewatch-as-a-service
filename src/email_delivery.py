@@ -15,7 +15,7 @@ def valid_email(value: str) -> bool:
 
 
 async def send_email(
-    recipient: str, subject: str, body: str, html: str = ""
+    recipient: str, subject: str, body: str, html: str = "", *, idempotency_key: str | None = None
 ) -> tuple[bool, str | None]:
     key = os.getenv("EMAIL_PROVIDER_API_KEY", "").strip()
     address = os.getenv("EMAIL_FROM_ADDRESS", "").strip()
@@ -32,7 +32,10 @@ async def send_email(
             ) as client:
                 response = await client.post(
                     "https://api.resend.com/emails",
-                    headers={"Authorization": f"Bearer {key}"},
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        **({"Idempotency-Key": idempotency_key} if idempotency_key else {}),
+                    },
                     json={
                         "from": f"{name} <{address}>",
                         "to": [recipient],

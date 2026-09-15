@@ -47,3 +47,34 @@ Use only for a deliberate fresh baseline, corrupt state after investigation, or 
 - [ ] Record review date, findings, owner and next action in the operator record.
 
 Platform references: [Task configuration](https://docs.apify.com/actors/running/tasks), [schedule behavior](https://docs.apify.com/actors/running/schedules), [record-level KVS operations](https://docs.apify.com/api/v2/storage-key-value-stores).
+
+## Collection coverage
+
+Check `collection_pages_fetched`, `collection_entities_found`, `collection_expansion_status` and reason on each root URL. A healthy fetch does not guarantee full collection coverage.
+
+| Status | Interpretation / action |
+| --- | --- |
+| `not_applicable` | Single-page content without collection signals; ordinary monitoring continues. |
+| `complete` | All discovered HTML pagination exhausted. Compare observed count with the site's advertised count manually; hidden APIs are not inferred. |
+| `unsupported` | Visible load-more cannot be followed as a public HTML URL, or entities are not identifiable. Ask for a usable public paginated collection/product URL; do not reverse-engineer private APIs or bypass controls. |
+| `limited` | 10 pages / 500 entities / 25 MB / 90 seconds bounded the scan. Review the reason. Prefer narrower category URLs instead of claiming the whole catalog is covered. |
+| `partial` | Extra-page failure, repetition, no new identities or a suspicious coverage drop. Inspect the source and safe logs. Missing known products are protected from removal alerts; confident observed price changes may still alert. |
+| `error` | Initial root fetch failed; diagnose access/timeouts as above. Last valid snapshot is preserved. |
+
+JS-only infinite scroll is not supported unless the HTML exposes a directly usable same-origin additional HTML URL. Configuring explicit separate public URLs is possible but each then has its own baseline and contributes one monitored page to activity reports. Removing pagination controls with ignore selectors can reduce coverage; inspect ignore rules when counts suddenly fall.
+
+On `collection_baseline_preserved`, do not delete the old good baseline merely to silence the diagnostic. Restore expansion and run again. If a real catalog shrink eliminates an entire pagination page, review evidence and decide whether a deliberate single-URL reset is appropriate; the conservative guard may otherwise retain those removals. First upgrade to aggregated coverage and first complete scan after an initial partial baseline intentionally initialize once without a scope-change alert.
+
+## Weekly activity reports
+
+No second scheduler is required. The first upgraded observation starts a seven-day period. Inspect the last configured URL's Dataset item for `weekly_report_*` fields and the client-scoped `weekly-*` KVS record (its stored `client_id` identifies the owner). Check these in the weekly operator review too.
+
+- No report yet: verify seven elapsed days, a running daily schedule, configured `client_email`, and no accepted significant alert in the closed period. Weeks with accepted alerts intentionally skip the activity report. A newly upgraded client has no historical report backlog.
+- Delivery failure: inspect `weekly_report_error`, credentials/provider events and the frozen `pending` period. Failed attempts retain it for a later run; only one pending period is kept. Do not delete the weekly state to force a resend.
+- Uncertain sends are automatically held once 23 hours have passed since the first attempt, leaving a margin inside Resend's 24-hour deduplication window. Verify provider records; only after confirming no acceptance may you remove `pending.attempted_at` to permit another attempt. Never clear it merely because no email arrived in the inbox.
+- Uncertain acceptance or persisted-send-state failure: check Resend first. Period idempotency protects identical requests within the provider's 24-hour window, not indefinitely. If already accepted, record that pending period as delivered (`last_weekly_report_at` with the actual UTC acceptance time and `pending: null`) only after pausing the Task and exporting/verifying the exact client record. Keep active-period counters unchanged. Resume once resolved.
+- Recipient/language changed during an uncertain retry: inspect any HTTP 409 and prior provider acceptance. Do not rotate the idempotency key to force delivery. Resolve the old pending period deliberately before retrying with different content.
+- Count mismatch: checks include failed attempts, each configured root URL counts once regardless of collection expansion, and health is the last observation per URL within the period. Mid-week URL edits can change the reported unique page count. Long schedule gaps must not be presented as successful checks.
+- Offboarding: stop schedules and handle the client's `weekly-*` record as well as its snapshots/monitor state under the agreed policy. A single-URL reset should not erase client-wide activity history.
+
+Report previews use the same compact transactional styling and contain no tracking, marketing or internal confidence/confirmation diagnostics. Full live acceptance instructions are in the [README](../README.md#pre-launch-rebuild-and-live-acceptance).

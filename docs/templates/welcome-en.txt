@@ -6,8 +6,10 @@ Your ChangeWatch monitoring is active. We monitor {{page_count}} competitor page
 
 The initial baselines have been recorded. Price changes, product additions or removals, promotions, and shipping or availability changes can trigger an alert.
 
-Only meaningful changes meeting the {{alert_threshold}}/100 threshold and our reliability checks generate an email. Some changes need more than one observation before confirmation. Receiving no email does not mean monitoring has stopped.
+Only meaningful changes meeting the {{alert_threshold}}/100 threshold and our reliability checks generate a change-alert email. Some changes need more than one observation before confirmation. Receiving no email does not mean monitoring has stopped.
 
 Alerts are monitoring signals: verify the source page before making an important decision. To change a monitored page or report a problem, contact {{support_contact}}.
+
+A weekly report summarizes monitoring activity when no significant alert was sent during the period.
 
 ChangeWatch

@@ -2,6 +2,55 @@
 
 A Python Apify Actor for competitor page monitoring: URL → normalized snapshot → comparison → deterministic importance score → structured Dataset result. No external AI service is required.
 
+## Collection Coverage v1
+
+Collections expand automatically from the supplied URL using HTML HTTP requests. Discovery prioritizes `rel="next"` and English/French next/load-more labels, then explicit numeric `page`, `p`, `pageNumber` query links or `/page/2` paths. Direct `data-next-url` / `data-load-more-url` attributes and labelled controls with `data-url` can supply additional HTML URLs. Only links present in the fetched HTML on the same origin are candidates. URL patterns are never invented; JSON APIs, arbitrary JavaScript execution, private API reverse engineering and anti-bot bypass are unsupported.
+
+Internal limits per configured URL are **10 pages including the initial page, 500 unique entities, 25 MB decompressed content and a 90-second collection time budget**. The existing 5 MB per-response limit still applies. Extra pages use one attempt; their failure stops expansion without discarding earlier successful pages. Expansion also stops on repeated content/next URL or no new entity identities. These defaults require no Task input changes. The original root fetch retains its retry behavior within the collection time budget.
+
+Entities are merged by the existing ID → product URL → normalized title → context hierarchy. Conflicting duplicate offers have their price interpretation disabled. Collection product text is sorted by identity, keeping first-page commercial copy outside product containers and pagination; changing product page/DOM order does not produce product additions/removals. Additional-page non-product banners are not aggregated. Single-product pages without pagination keep their original comparison behavior.
+
+Dataset diagnostics:
+
+| Field | Meaning |
+| --- | --- |
+| `collection_detected` | Multiple extracted entities or a pagination/load-more signal was found. |
+| `collection_pages_fetched` | Successfully fetched/extracted HTML pages, including a fetched repeat. |
+| `collection_entities_found` | Unique observed products retained within the cap; not the site's advertised total. |
+| `collection_expansion_status` | `not_applicable`, `complete`, `partial`, `unsupported`, `limited`, or `error`. |
+| `collection_expansion_reason` | Readable stopping/coverage diagnostic. |
+| `collection_removals_suppressed` | Previously known entities retained because current removal coverage is unconfirmed. |
+| `collection_baseline_preserved` | The last accepted collection snapshot was retained rather than overwritten. |
+
+`complete` means all **discoverable HTML pagination** was exhausted, not that every product on the website is guaranteed covered. An unlinked hidden backend cannot be inferred. A visible JS-only load-more control without a usable URL reports `unsupported`; a page with no pagination signals reports the observed HTML frontier only. Limits report `limited`, extra-page failures/repeats report `partial`, and initial fetch failure reports `error` and preserves the good snapshot.
+
+Incomplete scans keep observed entities and can still detect confident price changes in them. Missing old entities are retained for comparison, so a 300-product baseline followed by 24 products after an expansion failure cannot emit 276 removals. The last good snapshot stays intact, while pending/dedup/health diagnostics persist. Even an apparently successful scan with fewer pages **and** fewer products is treated conservatively as partial. This may miss a real removal when the final pagination page disappears; review at source before resetting. Initial partial coverage can establish a partial baseline; its first complete scan reinitializes rather than calling newly covered products new offerings.
+
+Existing schema-1/2 snapshots remain readable. The first transition from a single-response snapshot to collection scope establishes an aggregated baseline with `collection_migrated: true` and no alert. This deliberately skips interpretation across the scope change. Subsequent complete scans compare aggregated snapshots. The schema version and named KVS stay unchanged; preserve snapshot and monitor records. No browser package or new dependency is required.
+
+## Weekly monitoring activity report
+
+Normal scheduled runs now maintain one `weekly-<hash of client ID>` record in `changewatch-snapshots-v1`. On first upgraded observation, a seven-day UTC window starts; existing run history is not backfilled. Once the window closes, a report is eligible **only if no significant client alert was successfully sent during that window** and `client_email` is configured. Weeks containing accepted change-alert sends skip the activity email. There are no daily no-change emails, and change alerts keep their existing gates and format.
+
+The last configured URL's normal Dataset publication evaluates delivery once per run. No additional scheduler is needed: with daily runs, the first report normally arrives on the run at/after day seven. Report dates use the client's language and timezone; window boundaries remain ISO UTC in storage/Dataset. Seven days means elapsed time, so daylight-saving transitions may shift local boundary time. Long schedule gaps do not fabricate missing checks or send a backlog of empty weekly reports.
+
+Both plain text and inline-styled HTML show the reporting period, unique configured URLs actually checked in that period, attempted check count (including failures), latest per-URL health observed during the period and significant alerts **sent**. A collection counts as one monitored URL/check regardless of expansion page count. Degraded/failing URLs and partial coverage are listed clearly. Failed qualifying alert delivery is not described as “nothing changed”; minor/suppressed changes may also have occurred. This is activity evidence, not proof that every site was continuously reachable.
+
+Per-client state stores `last_weekly_report_at`, `period_start`, `period_end`, `checks_count`, `client_alerts_sent_in_period`, `healthy_urls`, `degraded_urls`, `failing_urls` and a frozen pending period for retries. Dataset items retain their existing fields and add `weekly_report_eligible`, `weekly_report_sent`, `weekly_report_period_start`, `weekly_report_period_end`, `weekly_report_checks_count`, `weekly_report_alerts_count`, `weekly_report_error`. They describe client-level activity, not a separate report per competitor. Only the final URL item can mark a report sent.
+
+Missing recipient/configuration or provider failure never fails monitoring. One pending period is retained for a later normal-run retry; successful sends clear it, and a late retry cannot cause another report less than seven days later. Exactly-once delivery cannot be guaranteed across a provider acceptance followed by storage failure or overlapping Actor runs. Weekly requests include a deterministic period-specific idempotency key; [Resend retains those keys for 24 hours](https://resend.com/docs/dashboard/emails/idempotency-keys). Uncertain sends are held for operator review after 23 hours from the first attempt; inspect provider acceptance before allowing another attempt outside that window. Keep one non-overlapping Task/schedule per client. Changing recipient/language during an uncertain retry can conflict with a previously accepted idempotent payload; resolve it with the operator runbook.
+
+### Pre-launch rebuild and live acceptance
+
+1. In the existing Apify Actor, retain Git source `main` at the repository root and build the release commit. Keep the named KVS, existing Task inputs, Resend secrets and verified sender. No new credentials or input fields are required. Ensure Task build selection uses the new successful build before resuming daily schedules.
+2. Use an operator-controlled, publicly reachable **three-page HTML collection fixture**: 24 products on page 1, 24 on page 2 and 12 on page 3, linked with `rel="next"`; each product has stable `data-sku`, title and one EUR price. Use a dedicated client ID `launch-collection-test`, an internal recipient, threshold 60 and Europe/Paris. Run once: initialized, 3 pages, 60 entities, complete, no alert.
+3. Change a page-3 product from 99 EUR to 79 EUR and run: expect exactly that price event and one normal alert. Repeat unchanged: no repeat alert. Move an unchanged product between pages: no product event. Add then remove a product on page 3 in separate runs: corresponding entity events (email remains subject to score/confirmation).
+4. Make page 2 return 403 and run: partial, 24 observed entities, 36 suppressed removals, preserved good snapshot and no mass-removal email. Restore it and verify complete coverage. Replace pagination with a JS-only `<button>Load more</button>`: expect unsupported/partial diagnostics rather than a claim of full coverage.
+5. For weekly acceptance, create a separate quiet test client with five controlled static URLs and an internal recipient. Initialize and run daily for seven elapsed days: expect 35 checks in the first closed period, zero accepted significant alerts and exactly one activity email on the next boundary run. Re-run immediately: no duplicate. Include a persistently failing URL in a separate trial to verify health wording. Use a third client with a real accepted price alert to verify that its closed week sends no redundant activity report.
+6. For a same-day weekly test **only on the isolated test client**, pause its schedule, finish all runs, export its `weekly-*` record, and change just its `period_start`/`period_end` to an elapsed seven-day interval. Retain genuine observed counters; never inflate them. Run once with the internal recipient, then rerun to check deduplication. This tests eligibility/delivery, not seven days of actual monitoring. Delete the isolated test state under policy or restore the exported pre-test record only with delivery disabled to avoid duplicate test mail. Never adjust production period dates to manufacture activity.
+
+Local mocked tests validate these behaviors; they do not establish live Apify delivery or target-site coverage. See the [operator runbook](docs/OPERATOR_RUNBOOK.md) for diagnosis and recovery.
+
 ## Operating ChangeWatch for customers
 
 Use one saved Apify Task per customer, named `changewatch-<client_id>`, and one daily schedule targeting that Task. The standard input contract is `client_id`, `client_email`, `language`, `timezone`, `alert_threshold` and `competitors`. Client IDs must be unique, permanent lowercase ASCII kebab-case (up to 200 characters). Noncanonical IDs are rejected rather than silently normalized; existing noncanonical IDs require an explicit transition to a verified unused ID and a fresh baseline. Valid existing IDs retain their snapshots.

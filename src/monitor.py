@@ -184,8 +184,10 @@ async def fetch_text(
     include_entities: bool = False,
     ignore_selectors=None,
     ignore_text_patterns=None,
+    max_bytes: int = MAX_BYTES,
+    max_attempts: int = 3,
 ) -> str | dict:
-    for attempt in range(3):
+    for attempt in range(max_attempts):
         try:
             async with asyncio.timeout(60):
                 async with client.stream("GET", url) as response:
@@ -196,13 +198,16 @@ async def fetch_text(
                     body = bytearray()
                     async for chunk in response.aiter_bytes():
                         body.extend(chunk)
-                        if len(body) > MAX_BYTES:
+                        if len(body) > min(MAX_BYTES, max_bytes):
                             raise ValueError("Page exceeds 5 MB decompressed limit")
                     html = bytes(body).decode(response.encoding or "utf-8", errors="replace")
                     html = filter_html(html, ignore_selectors or [], ignore_text_patterns or [])
                     text = extract_text(html)
                     if include_entities:
                         return {
+                            "_html": html,
+                            "_bytes": len(body),
+                            "_url": str(response.url),
                             "text": text,
                             "entities": extract_entities(html, str(response.url)),
                             "requires_entities": sum(isinstance(t, tuple) for t in tokens(text)) > 1
@@ -224,7 +229,7 @@ async def fetch_text(
                 503,
                 504,
             }
-            if attempt == 2 or not retryable:
+            if attempt == max_attempts - 1 or not retryable:
                 raise
             await asyncio.sleep(2**attempt)
     raise RuntimeError("Fetch attempts exhausted")
